@@ -16,6 +16,7 @@ note: the list has being edited (last in March 2026) to reflect discovered needs
   - renaming every file under that directory since they all carry `sub-` prefix
     - possibly also under `sourcedata/`
   - fixing up `_scans` file as well since that is where those files are listed as well
+  - modifying `participants.json`
 - **remove a subject[/session]** (need: low)
 - **remove a run** (need: low) while shifting all subsequent run indexes
 - **rename or fix a filename** (need: high) (just `rename`) - could be used by `subject-rename` -- since a file might have a side car file, and then listed in `_scans`, might come handy
