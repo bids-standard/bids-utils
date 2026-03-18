@@ -36,6 +36,16 @@ note: the list has being edited (last in March 2026) to reflect discovered needs
         - `aggregate` -- propagate up common metadata (so easy to overview what is common)
         - `segregate` -- propagate down into the leafs (so easy to view/share individual subj/sess with all metadata)
         - `deduplicate` -- combined with either of the above to remove either at the leafs or at the roots, leaving only a single source (among .tsv/.json etc; might still be within .nwb etc if was extracted from there)
+     - notes:  for 'aggregate' we need to be careful to not state a common metadata attribute at higher level if it was missing entirely from some involved file or missing such file entirely! e.g. if all subjects have consistent `RepetitionTime` in their `_bold.json` but then one subject lacks `_bold.json` entirely for its `_bold.nii.gz` ! Also here we could have different "modes" of aggregation as there could be aggressive aggregation into top level
+           - `bold.json` - common across all bolds
+          - `task-rest_bold.json` - specific to `task-rest`
+          - `task-motor_bold.json` - specific to `task-motor`
+          - `acq-et41_bold.json` - specific to `acq-et41`
+       vs  e.g.
+          - `task-rest_bold.json`
+          - `task-rest_acq-et41_bold.json`
+          - `task-motor_bold.json`
+          - `task-motor_acq-et41_bold.json`
     - "audit": Identify metadata values that are neither unique across metadata files nor equivalent across metadata files, but somewhere in between; this precludes exploitation of inheritance principle, and can be indicative of some error in acquisition harmonisation.
 
 ## Various related ideas
