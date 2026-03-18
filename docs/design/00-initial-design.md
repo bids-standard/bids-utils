@@ -31,11 +31,12 @@ note: the list has being edited (last in March 2026) to reflect discovered needs
    - using subjects (re)mapping file
 - **bubble-up/condense/organize metadata** (need: medium) - move common (meta)data up in the hierarchy to make BIDS dataset easier for users to find at higher level, and not duplicated underneath (
    - [inheritance principle](https://bids-specification.readthedocs.io/en/stable/common-principles.html#the-inheritance-principle), [bids, 1.10.2 (IIRC), 2: summarization](https://github.com/bids-standard/bids-2-devel/issues/65))
-   - "prototype": @Lestropie initiated https://github.com/Lestropie/IP-freely (TODO: review)
-   - could have modes to
-      - `aggregate` -- propagate up common metadata (so easy to overview what is common)
-      - `segregate` -- propagate down into the leafs (so easy to view/share individual subj/sess with all metadata)
-      - `deduplicate` -- combined with either of the above to remove either at the leafs or at the roots, leaving only a single source (among .tsv/.json etc; might still be within .nwb etc if was extracted from there)
+     - prototype: @Lestropie initiated https://github.com/Lestropie/IP-freely (TODO: review)
+     - could have modes to
+        - `aggregate` -- propagate up common metadata (so easy to overview what is common)
+        - `segregate` -- propagate down into the leafs (so easy to view/share individual subj/sess with all metadata)
+        - `deduplicate` -- combined with either of the above to remove either at the leafs or at the roots, leaving only a single source (among .tsv/.json etc; might still be within .nwb etc if was extracted from there)
+    - "audit": Identify metadata values that are neither unique across metadata files nor equivalent across metadata files, but somewhere in between; this precludes exploitation of inheritance principle, and can be indicative of some error in acquisition harmonisation.
 
 ## Various related ideas
 
