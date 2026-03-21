@@ -147,17 +147,39 @@ Start simple. Resist the urge to over-engineer.
 bids-utils depends on bidsschematools for schema access. It does NOT fork or
 vendor the schema. When bidsschematools evolves, bids-utils follows.
 
-### Relationship to PyBIDS
+### Relationship to PyBIDS and bids2table
 
-bids-utils may use PyBIDS for dataset querying but does NOT require it. Core
-operations (rename, migrate, metadata manipulation) must work without PyBIDS.
-Where PyBIDS is used, it is an optional dependency.
+PyBIDS is a substantial library with its own abstractions, database-backed
+indexing, and conventions. While its implementation and interfaces should be
+**consulted** during design (to avoid gratuitous incompatibility), adopting
+PyBIDS as a dependency—even optional—requires a **very significant, clearly
+demonstrated benefit** that cannot be achieved with lighter alternatives.
+The bar is high because PyBIDS brings considerable transitive complexity.
+
+**bids2table** is a more lightweight alternative for dataset querying and
+tabular access. Where bids-utils needs to enumerate or query dataset contents,
+bids2table should be evaluated first as a potentially adoptable dependency
+before considering PyBIDS.
+
+Core operations (rename, migrate, metadata manipulation) must work without
+either PyBIDS or bids2table. Any dataset querying dependency, if adopted,
+must be optional.
 
 ### Relationship to bids-validator
 
 After any mutating operation, bids-utils should be able to invoke the BIDS
 validator to confirm the dataset remains valid. The validator is a recommended
 but optional dependency (used in testing, available as a post-operation check).
+
+The **primary validator** is the Deno-based official BIDS validator, available
+from PyPI as **`bids-validator-deno`**. This is the reference implementation
+maintained by the BIDS community.
+
+There is a **work-in-progress Python-native validator**
+(https://github.com/bids-standard/python-validator) which may be adopted later
+as an alternative or additional validation backend. Until it matures, bids-utils
+should target `bids-validator-deno` as the default validation tool and not
+depend on the Python validator for correctness guarantees.
 
 ### Scope boundaries
 
@@ -237,4 +259,4 @@ Amendments require:
 All PRs and reviews must verify compliance with these principles. Deviations
 from the constitution must be explicitly justified and documented.
 
-**Version**: 1.1.0 | **Ratified**: 2026-03-21 | **Last Amended**: 2026-03-21
+**Version**: 1.2.0 | **Ratified**: 2026-03-21 | **Last Amended**: 2026-03-21
