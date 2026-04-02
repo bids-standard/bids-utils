@@ -140,6 +140,79 @@ Start simple. Resist the urge to over-engineer.
   a new command.
 - Three similar lines of code are better than a premature abstraction.
 
+### X. Versioning & Breaking Changes
+
+Version numbering MUST follow semantic versioning (MAJOR.MINOR.PATCH):
+- **MAJOR**: Breaking changes (incompatible API changes).
+- **MINOR**: New features (backward compatible additions).
+- **PATCH**: Bug fixes (backward compatible corrections).
+
+Breaking changes REQUIRE:
+- Migration guide in release notes.
+- Deprecation warnings in prior MINOR version (when possible).
+- Clear documentation of changed behavior.
+
+**Rationale**: Predictable versioning builds trust with users and integrators.
+Clear migration paths enable safe upgrades—especially important for a tool
+that manipulates irreplaceable research data.
+
+### XI. DRY Principle — No Code Duplication
+
+**Duplication is evil.** Code MUST NOT contain duplicated logic or functionality.
+
+**Before writing new code**:
+- Introspect existing codebase for similar functionality.
+- Search for patterns that solve the same or related problems.
+- Identify opportunities to extract common functionality.
+- Prefer reusing existing functions over creating new ones.
+
+**When duplication is detected**:
+- Extract common functionality into reusable functions/modules.
+- Refactor immediately (do not defer "for later").
+- Create utility functions for repeated patterns.
+- Use composition and higher-order functions for variations.
+
+**Code review MUST**:
+- Actively check for code duplication (copy-paste, similar logic).
+- Identify opportunities to refactor into reusable components.
+- Reject PRs with obvious duplication without justification.
+- Suggest existing functions/modules that solve the same problem.
+
+**Allowed exceptions** (duplication is acceptable):
+- **Automated generation**: Generated code (type definitions from schema,
+  documentation).
+- **Build artifacts**: Compiled output, bundled assets.
+- **Test fixtures**: Similar test setup where abstraction reduces readability.
+- **Configuration**: Environment-specific configs with overlapping values.
+- **Explicit performance**: Inlining for performance (must be justified and
+  measured).
+
+All exceptions MUST be documented with rationale.
+
+**Tools and enforcement**:
+- **pylint duplicate-code** (`pylint --disable=all --enable=duplicate-code`):
+  Line-based detection with Python-native AST awareness. Supports ignoring
+  imports, docstrings, and signatures to reduce false positives. Use via
+  `pylint` (not standalone `symilar`) to get `# pylint: disable=duplicate-code`
+  pragma support and `--ignore-paths` for excluding files (e.g., migrations,
+  generated code, legacy Python 2 files).
+- **jscpd** (`npx jscpd --format python`): Token-based detection via
+  Rabin-Karp algorithm. More sensitive than pylint — catches duplication across
+  formatting differences. Provides built-in `--threshold` for CI gating
+  (exit non-zero if duplication exceeds N%) and rich reporting (JSON, HTML).
+- Both tools should run in CI as a `tox` testenv (e.g., `tox -e duplication`).
+  pylint catches Python-idiomatic duplication; jscpd catches
+  formatting-resistant clones. They are complementary.
+- Files with acceptable duplication (migrations, generated code) should be
+  excluded via `--ignore-paths` (pylint) or `--ignore` globs (jscpd), not
+  by raising thresholds globally.
+- Regular refactoring to address accumulated duplication.
+
+**Rationale**: Code duplication multiplies maintenance burden, bugs, and
+inconsistencies. Every duplicated block is a potential source of divergence
+and technical debt. Extracting common functionality makes the codebase smaller,
+more maintainable, and easier for new contributors to understand.
+
 ## Ecosystem Integration
 
 ### Relationship to bidsschematools
@@ -204,8 +277,26 @@ bids-utils manipulates existing datasets. It does NOT:
 - **Testing**: `pytest` orchestrated by `tox` (with `tox-uv`).
 - **Linting**: `ruff` for formatting and linting.
 - **Type checking**: `mypy` with strict mode on new code.
+- **Duplication detection**: `pylint --duplicate-code` (AST-aware, Python-native)
+  and `jscpd` (token-based, cross-format). Both run as dedicated `tox` testenvs.
 - **Documentation**: `mkdocs` (aligned with bids-specification).
 - **CI**: GitHub Actions invoking `tox`, using `tox-gh-actions`.
+
+### Releases
+
+Releases MUST be automated. Manual release processes are error-prone and
+create bus-factor risk.
+
+- Use **intuit/auto** (or a comparable automated release tool) to drive
+  versioning, changelog generation, and publishing from PR labels.
+- Every merged PR must carry a release label (e.g., `patch`, `minor`, `major`,
+  `internal`, `documentation`) that determines version impact.
+- Changelog is generated automatically from PR titles and labels — no manual
+  CHANGELOG.md editing.
+- Release workflow runs in CI: tag, build, publish to PyPI, create GitHub
+  Release with generated notes.
+- This pattern is proven in the ecosystem (dandi-cli uses intuit/auto;
+  datalad uses an auto-inspired homebrewed approach).
 
 ### Dependency Layering
 
@@ -259,4 +350,4 @@ Amendments require:
 All PRs and reviews must verify compliance with these principles. Deviations
 from the constitution must be explicitly justified and documented.
 
-**Version**: 1.2.0 | **Ratified**: 2026-03-21 | **Last Amended**: 2026-03-21
+**Version**: 1.4.0 | **Ratified**: 2026-03-21 | **Last Amended**: 2026-04-02
