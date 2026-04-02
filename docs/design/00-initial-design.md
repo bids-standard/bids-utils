@@ -23,6 +23,8 @@ note: the list has being edited (last in March 2026) to reflect discovered needs
    - some non-BIDS compliant file, e.g. having spurious suffix like a `_test`
    - prototypes:
      - spacetop dataset (openneuro ds005256, [rename_file](https://github.com/spatialtopology/ds005256/blob/master/code/rename_file))
+   - related efforts inspired by working on BIDS datasets:
+     - [rename-tool](https://github.com/just-meng/rename-tool) by @just-meng
 - **renaming a session** (need: medium) (`session-rename`)
 - **moving into a session** (need: medium) (`session-rename '' session`) -- whenever dataset (or a specific subject?) was collected without any session'ing, and then multiple sessions decided to be taken
 - **merge datasets** (need: low) - implementation might relate to *Moving into a session*. Take two datasets (possibly without sessions) and then merge them either by
