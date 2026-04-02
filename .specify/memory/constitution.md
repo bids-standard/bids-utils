@@ -138,7 +138,6 @@ Start simple. Resist the urge to over-engineer.
 - Prefer flat module structure over deep nesting.
 - If a feature can be achieved by composing existing commands, do not create
   a new command.
-- Three similar lines of code are better than a premature abstraction.
 
 ### X. Versioning & Breaking Changes
 

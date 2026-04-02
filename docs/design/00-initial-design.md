@@ -28,6 +28,8 @@ note: the list has being edited (last in March 2026) to reflect discovered needs
 - **renaming a session** (need: medium) (`session-rename`)
 - **moving into a session** (need: medium) (`session-rename '' session`) -- whenever dataset (or a specific subject?) was collected without any session'ing, and then multiple sessions decided to be taken
 - **merge datasets** (need: low) - implementation might relate to *Moving into a session*. Take two datasets (possibly without sessions) and then merge them either by
+- **split datasets** (need: low) - the opposite of merging -- some times it is useful to generate a dataset which contains e.g. only behavioral data, or only stimuli, to facilitate more efficient sharing and reuse
+
    - just combining subjects (and failing if conflicting)
    - placing each one into a (specified) session
    - using subjects (re)mapping file
