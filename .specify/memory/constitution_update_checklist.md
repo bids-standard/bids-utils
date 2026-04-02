@@ -5,75 +5,83 @@ When amending the constitution (`/memory/constitution.md`), ensure all dependent
 ## Templates to Update
 
 ### When adding/modifying ANY article:
-- [ ] `/templates/plan-template.md` - Update Constitution Check section
-- [ ] `/templates/spec-template.md` - Update if requirements/scope affected
-- [ ] `/templates/tasks-template.md` - Update if new task types needed
-- [ ] `/.claude/commands/plan.md` - Update if planning process changes
-- [ ] `/.claude/commands/tasks.md` - Update if task generation affected
-- [ ] `/CLAUDE.md` - Update runtime development guidelines
+- [x] `/templates/plan-template.md` - Update Constitution Check section
+- [x] `/templates/spec-template.md` - Update if requirements/scope affected
+- [x] `/templates/tasks-template.md` - Update if new task types needed
+- [ ] `/CLAUDE.md` - Update runtime development guidelines (file does not exist yet)
 
 ### Article-specific updates:
 
 #### Article I (Do No Harm):
-- [ ] Ensure templates require validity verification steps
-- [ ] Update test requirements to include bids-examples sweeps
-- [ ] Add dry-run requirements to CLI command templates
+- [x] Ensure templates require validity verification steps
+- [x] Update test requirements to include bids-examples sweeps
+- [x] Add dry-run requirements to CLI command templates
 
 #### Article II (Schema-Driven):
-- [ ] Update dependency references in templates
-- [ ] Ensure schema version compatibility is documented
+- [x] Update dependency references in templates
+- [x] Ensure schema version compatibility is documented
 
 #### Article III (Library-First):
-- [ ] Ensure templates emphasize library API before CLI
-- [ ] Update import/module structure guidance
+- [x] Ensure templates emphasize library API before CLI
+- [x] Update import/module structure guidance
 
 #### Article IV (CLI Excellence):
-- [ ] Update CLI flag requirements in templates
-- [ ] Add dry-run and verbosity requirements
+- [x] Update CLI flag requirements in templates
+- [x] Add dry-run and verbosity requirements
 
 #### Article V (Test-First):
-- [ ] Update test order in all templates
-- [ ] Emphasize TDD requirements and bids-examples usage
-- [ ] Add test approval gates
+- [x] Update test order in all templates
+- [x] Emphasize TDD requirements and bids-examples usage
+- [x] Add test approval gates
 
 #### Article VI (Performance at Scale):
-- [ ] Add performance considerations to plan template
-- [ ] Include profiling steps in task template
+- [x] Add performance considerations to plan template
+- [x] Include profiling steps in task template
 
 #### Article VII (VCS Awareness):
-- [ ] Add VCS detection requirements to implementation templates
-- [ ] Include git-annex/DataLad considerations
+- [x] Add VCS detection requirements to implementation templates
+- [x] Include git-annex/DataLad considerations
 
 #### Article VIII (Observability):
-- [ ] Add logging requirements to templates
-- [ ] Include change manifest output specifications
+- [x] Add logging requirements to templates
+- [x] Include change manifest output specifications
 
 #### Article IX (Simplicity):
-- [ ] Update YAGNI reminders in templates
-- [ ] Add complexity justification requirements
+- [x] Update YAGNI reminders in templates
+- [x] Add complexity justification requirements
+
+#### Article X (Versioning & Breaking Changes):
+- [x] SemVer policy documented in constitution
+- [x] Migration guide and deprecation requirements specified
+
+#### Article XI (DRY — No Code Duplication):
+- [x] Duplication detection tooling specified (pylint + jscpd)
+- [x] Enforcement via tox testenvs documented
+- [x] Allowed exceptions with rationale requirements listed
 
 ## Validation Steps
 
 1. **Before committing constitution changes:**
-   - [ ] All templates reference new requirements
-   - [ ] Examples updated to match new rules
-   - [ ] No contradictions between documents
+   - [x] All templates reference new requirements
+   - [x] Examples updated to match new rules
+   - [x] No contradictions between documents
 
 2. **After updating templates:**
-   - [ ] Run through a sample implementation plan
-   - [ ] Verify all constitution requirements addressed
-   - [ ] Check that templates are self-contained
+   - [ ] Run through a sample implementation plan (pending — no specs written yet)
+   - [x] Verify all constitution requirements addressed
+   - [x] Check that templates are self-contained
 
 3. **Version tracking:**
-   - [ ] Update constitution version number
-   - [ ] Note version in template footers
-   - [ ] Add amendment to constitution history
+   - [x] Update constitution version number
+   - [x] Note version in template footers
+   - [x] Add amendment to constitution history
 
 ## Template Sync Status
 
-Last sync check: 2026-03-21
-- Constitution version: 1.0.0
-- Templates aligned: N/A (initial creation, templates pending)
+Last sync check: 2026-04-02
+- Constitution version: 1.4.0
+- Templates aligned: Yes (plan, spec, tasks, checklist templates all present)
+- Pending: `/CLAUDE.md` (root project guidance file not yet created)
 
 ---
 
