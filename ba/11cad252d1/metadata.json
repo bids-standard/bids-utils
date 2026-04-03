@@ -1,0 +1,25 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "ba11cad252d1",
+  "strategy": "manual-commit",
+  "branch": "00-initial-design",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".specify/specs/00-initial-design.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ba/11cad252d1/0/metadata.json",
+      "transcript": "/ba/11cad252d1/0/full.jsonl",
+      "content_hash": "/ba/11cad252d1/0/content_hash.txt",
+      "prompt": "/ba/11cad252d1/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 22,
+    "cache_creation_tokens": 47225,
+    "cache_read_tokens": 626086,
+    "output_tokens": 6567,
+    "api_call_count": 18
+  }
+}
