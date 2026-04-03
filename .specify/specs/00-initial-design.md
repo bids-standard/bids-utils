@@ -129,6 +129,8 @@ A dataset has metadata duplicated across many sidecar JSON files at the leaf lev
 2. **Given** a subject that is missing a `_bold.json` entirely (but has `_bold.nii.gz`), **When** aggregation is attempted for `RepetitionTime`, **Then** the tool does NOT aggregate that key (since the value is unknown for that subject, not merely identical).
 3. **Given** a user running `bids-utils metadata segregate`, **When** the command completes, **Then** all metadata is pushed down to leaf-level files (full self-contained sidecars per file).
 4. **Given** `bids-utils metadata audit`, **When** run, **Then** the tool reports metadata keys that are neither fully unique nor fully equivalent across files — indicating potential acquisition inconsistencies.
+5. The `aggregate` and `segregate` could be given specific path(s) to aggregate or segregate to, e.g. `aggregate sub-*/` would bubble-up common metadata per each subject only. Both commands by default would operate across all levels, thus bringing up/down common/different metadata to appropriate level in the hierarchy.
+6. Both `aggregate` and `segregate` should have an option on either to 'normalize' metadata presense, as to "copy" (duplicate) or to "move" thus making it defined uniquely (without duplication).  
 
 ---
 
@@ -162,11 +164,11 @@ A specific run needs to be removed and subsequent run indices shifted to maintai
 
 ---
 
-### User Story 9 — Merge datasets (Priority: P3, need: low)
+### User Story 9 — Merge datasets (Priority: P3, need: medium)
 
 Two BIDS datasets need to be combined — either by simply combining subjects (failing on conflicts) or by placing each dataset into a separate session.
 
-**Why this priority**: Low need per design doc. Implementation builds on session-rename.
+**Why this priority**: Medium per Yarik. Implementation builds on session-rename and also potentially on metadata aggregate/segregate.
 
 **Independent Test**: Merge two bids-examples datasets, validate the result.
 
@@ -175,6 +177,9 @@ Two BIDS datasets need to be combined — either by simply combining subjects (f
 1. **Given** two valid datasets with non-overlapping subjects, **When** `bids-utils merge datasetA datasetB --output merged/` is run, **Then** all subjects from both datasets appear in the output and the merged dataset is valid.
 2. **Given** two datasets with overlapping subject IDs, **When** merge is run without `--into-sessions`, **Then** the tool refuses with exit code 2 listing the conflicts.
 3. **Given** `--into-sessions ses-A ses-B`, **When** merge is run, **Then** each dataset's data is placed under the respective session.
+4. Actually there is a "common" workflow for such functionality: when conversion to BIDS is done per subject/session thus collecting lots of small BIDS datasets, and then "merging" them into a single dataset, potentially incrementally.
+5. Could be a case where some session was interrupted and then additional data acquired in a separate acquisition session -- we might convert it separately but then would still want to merge those extra files into the same, already present session (e.g. more _run-'s of `_bold`). Option might need to be given on how to address "conflicts", as e.g. whether to add new _run- indices.
+6. During merge there could be conflicts in e.g. different ages (across sessions) for the same subject.  Or top level sidecar metadata .json files aggregated.  One of the strategies could be 'segregate' into the next level (sub-*/) and then re-aggregate into the top thus accounting for potential differences etc.
 
 ---
 
