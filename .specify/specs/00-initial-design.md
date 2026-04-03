@@ -32,24 +32,57 @@ A researcher has a BIDS file with an incorrect entity or a non-compliant name (e
 
 ---
 
-### User Story 2 — Migrate a dataset toward BIDS 2.0 (Priority: P1, need: high)
+### User Story 2 — Migrate a dataset within BIDS 1.x to address deprecations (Priority: P1, need: high)
 
-A lab maintaining a BIDS 1.x dataset needs to address deprecations and prepare for BIDS 2.0. They run `bids-utils migrate --to 2.0` which reads the machine-readable schema (via `bidsschematools`) and applies the necessary transformations (entity renames, metadata key changes, structural reorganization) in a safe manner.  Changes do not need to be reversible - use of VCS should incouraged instead to retain prior versions.
+A lab maintains a BIDS dataset created under an older 1.x version (e.g., 1.4 or 1.6). Over time, the BIDS specification has deprecated metadata fields, suffixes, coordinate-system values, and path formats. The dataset still validates but emits deprecation warnings. The user runs `bids-utils migrate` (defaulting to the current released 1.x version) to bring the dataset up to date, resolving all deprecations automatically where possible.
 
-**Why this priority**: BIDS 2.0 is approaching and many datasets need a migration path. A prototype already exists (bids-specification PR #2282) validating the concept.
+The BIDS specification has accumulated significant deprecations within the 1.x series that `migrate` must handle:
 
-**Independent Test**: Take a BIDS 1.x dataset from bids-examples, run `bids-utils migrate --target 2.0`, verify the output passes the BIDS 2.0 validator schema.
+- **Metadata field replacements**: `BasedOn` → `Sources`, `RawSources` → `Sources`, `ScanDate` → `acq_time` column in `_scans.tsv` (PET, since 1.6.0), `DCOffsetCorrection` → `SoftwareFilters` (iEEG, since 1.6.0), `AcquisitionDuration` → `FrameAcquisitionDuration` (BOLD)
+- **Path format → BIDS URI migration** (since 1.8.0): `IntendedFor`, `AssociatedEmptyRoom`, `Sources` fields that use relative paths must be converted to BIDS URIs (`bids::` scheme)
+- **Value format changes**: `DatasetDOI` bare DOIs → URI format (since 1.8.0)
+- **Suffix deprecations** (since 1.5.0): `_phase` → `_part-phase_bold`, and deprecated anatomical suffixes `T2star`, `FLASH`, `PD`
+- **Coordinate system value renames**: `ElektaNeuromag` → `NeuromagElektaMEGIN`, deprecated template identifiers (`fsaverage3`–`fsaverage6` → `fsaverage`, `fsaveragesym` → `fsaverageSym`, versioned `UNCInfant*` → `UNCInfant`)
+
+All deprecation knowledge MUST be derived from the machine-readable schema (`bidsschematools`), specifically `src/schema/objects/metadata.yaml`, `enums.yaml`, `suffixes.yaml`, and `src/schema/rules/checks/deprecations.yml` — not hardcoded.
+
+**Why this priority**: These deprecations affect existing datasets **today**. Unlike the 2.0 migration, 1.x deprecation fixes can be applied incrementally, are lower risk, and immediately silence validator warnings. Many dataset maintainers are unaware of deprecations accumulated across 1.5→1.6→1.8→1.9 and need an automated path to modernize.
+
+**Independent Test**: Take a BIDS 1.4-era dataset from bids-examples, run `bids-utils migrate` (targeting current 1.x), verify deprecation warnings are eliminated and the dataset passes validation.
 
 **Acceptance Scenarios**:
 
-1. **Given** a valid BIDS 1.8 dataset, **When** `bids-utils migrate --target 2.0 --dry-run` is run, **Then** the tool lists all changes needed (deprecations, renames) without modifying any files.
-2. **Given** a valid BIDS 1.8 dataset, **When** `bids-utils migrate --target 2.0` is run, **Then** the dataset is transformed and passes validation against the BIDS 2.0 schema.
-3. **Given** a dataset already at the target version, **When** `bids-utils migrate` is run, **Then** the tool reports "nothing to do" and exits with code 0.
-4. **Given** a dataset with ambiguities that require human judgment, **When** migration encounters them, **Then** the tool aborts with a clear explanation rather than guessing.
+1. **Given** a BIDS 1.4 dataset with `IntendedFor` using relative paths in fieldmap JSON sidecars, **When** `bids-utils migrate` is run, **Then** all `IntendedFor` values are converted to BIDS URIs and the dataset passes validation without deprecation warnings.
+2. **Given** a BIDS 1.4 dataset with `_phase.nii.gz` files (deprecated suffix), **When** `bids-utils migrate` is run, **Then** files are renamed to `_part-phase_bold.nii.gz` (with sidecars), `_scans.tsv` is updated, and the dataset remains valid.
+3. **Given** a PET dataset with `ScanDate` in sidecar JSON, **When** `bids-utils migrate` is run, **Then** the value is moved to the `acq_time` column in the corresponding `_scans.tsv` and removed from the JSON.
+4. **Given** an MEG dataset with `MEGCoordinateSystem: "ElektaNeuromag"`, **When** `bids-utils migrate` is run, **Then** the value is updated to `"NeuromagElektaMEGIN"`.
+5. **Given** a derivatives dataset with `RawSources` and `BasedOn` fields, **When** `bids-utils migrate` is run, **Then** these are consolidated into `Sources` with BIDS URI format.
+6. **Given** `bids-utils migrate --dry-run`, **When** run on any dataset, **Then** the tool lists each deprecation found, the proposed fix, and the affected file — without modifying anything.
+7. **Given** a dataset already conforming to the target version, **When** `bids-utils migrate` is run, **Then** the tool reports "nothing to do" and exits with code 0.
+8. **Given** a deprecation that cannot be resolved automatically (e.g., ambiguous `IntendedFor` with no clear mapping), **When** migration encounters it, **Then** the tool reports it clearly and skips that item rather than guessing.
+9. **Given** `bids-utils migrate --to 1.9.0` (explicit target within 1.x), **When** run, **Then** only deprecations up to and including 1.9.0 are applied — deprecations introduced in later versions are not.
 
 ---
 
-### User Story 3 — Rename a subject (Priority: P2, need: medium)
+### User Story 3 — Migrate a dataset toward BIDS 2.0 (Priority: P1, need: high)
+
+A lab maintaining a BIDS 1.x dataset needs to prepare for BIDS 2.0. They run `bids-utils migrate --to 2.0` which reads the machine-readable schema (via `bidsschematools`) and applies the necessary transformations (entity renames, metadata key changes, structural reorganization) in a safe manner. This builds on top of the 1.x deprecation handling (User Story 2) — a dataset should first be brought up to the latest 1.x before migrating to 2.0. Changes do not need to be reversible — use of VCS should be encouraged instead to retain prior versions.
+
+**Why this priority**: BIDS 2.0 is approaching and many datasets need a migration path. A prototype already exists (bids-specification PR #2282) validating the concept.
+
+**Independent Test**: Take a BIDS 1.x dataset from bids-examples, run `bids-utils migrate --to 2.0`, verify the output passes the BIDS 2.0 validator schema.
+
+**Acceptance Scenarios**:
+
+1. **Given** a valid BIDS 1.8 dataset, **When** `bids-utils migrate --to 2.0 --dry-run` is run, **Then** the tool lists all changes needed (deprecations, renames, structural changes) without modifying any files.
+2. **Given** a valid BIDS 1.8 dataset, **When** `bids-utils migrate --to 2.0` is run, **Then** the dataset is transformed and passes validation against the BIDS 2.0 schema.
+3. **Given** a dataset already at the target version, **When** `bids-utils migrate` is run, **Then** the tool reports "nothing to do" and exits with code 0.
+4. **Given** a dataset with ambiguities that require human judgment, **When** migration encounters them, **Then** the tool aborts with a clear explanation rather than guessing.
+5. **Given** a BIDS 1.4 dataset, **When** `bids-utils migrate --to 2.0` is run, **Then** the tool first applies all 1.x deprecation fixes (Story 2) before applying 2.0-specific transformations — the migration is cumulative.
+
+---
+
+### User Story 4 — Rename a subject (Priority: P2, need: medium)
 
 A data manager needs to anonymize or re-number a subject. They run `bids-utils subject-rename sub-01 sub-99`. The tool renames the `sub-` directory, every file within it (since all carry the `sub-` prefix), updates `participants.tsv`, updates all `_scans.tsv` files, and optionally processes `sourcedata/`, `.heudiconv/` and common derivatives under `derivatives/` (via recursive calls to the same method on each derivative).
 
@@ -66,7 +99,7 @@ A data manager needs to anonymize or re-number a subject. They run `bids-utils s
 
 ---
 
-### User Story 4 — Rename a session (Priority: P2, need: medium)
+### User Story 5 — Rename a session (Priority: P2, need: medium)
 
 Similar to subject-rename but for session entities. Includes the special case of **moving into a session** — a dataset collected without sessions that now needs session identifiers.
 
@@ -82,7 +115,7 @@ Similar to subject-rename but for session entities. Includes the special case of
 
 ---
 
-### User Story 5 — Bubble-up / condense / organize metadata (Priority: P2, need: medium)
+### User Story 6 — Bubble-up / condense / organize metadata (Priority: P2, need: medium)
 
 A dataset has metadata duplicated across many sidecar JSON files at the leaf level. The user runs `bids-utils metadata aggregate` to hoist common key-value pairs up the BIDS inheritance hierarchy, reducing redundancy and making the dataset easier to overview.
 
@@ -99,7 +132,7 @@ A dataset has metadata duplicated across many sidecar JSON files at the leaf lev
 
 ---
 
-### User Story 6 — Remove a subject or session (Priority: P3, need: low)
+### User Story 7 — Remove a subject or session (Priority: P3, need: low)
 
 A dataset maintainer needs to remove a subject (or session) entirely. The tool removes the directory tree, updates `participants.tsv`, and cleans up `_scans.tsv`.
 
@@ -114,7 +147,7 @@ A dataset maintainer needs to remove a subject (or session) entirely. The tool r
 
 ---
 
-### User Story 7 — Remove a run (Priority: P3, need: low)
+### User Story 8 — Remove a run (Priority: P3, need: low)
 
 A specific run needs to be removed and subsequent run indices shifted to maintain contiguity (e.g., removing `run-02` means `run-03` becomes `run-02`).
 
@@ -129,7 +162,7 @@ A specific run needs to be removed and subsequent run indices shifted to maintai
 
 ---
 
-### User Story 8 — Merge datasets (Priority: P3, need: low)
+### User Story 9 — Merge datasets (Priority: P3, need: low)
 
 Two BIDS datasets need to be combined — either by simply combining subjects (failing on conflicts) or by placing each dataset into a separate session.
 
@@ -145,7 +178,7 @@ Two BIDS datasets need to be combined — either by simply combining subjects (f
 
 ---
 
-### User Story 9 — Split datasets (Priority: P3, need: low)
+### User Story 10 — Split datasets (Priority: P3, need: low)
 
 A dataset needs to be split — for example, extracting only behavioral data or only stimuli for more efficient sharing.
 
@@ -167,6 +200,9 @@ A dataset needs to be split — for example, extracting only behavioral data or 
 - How does aggregation handle `.nwb` files that embed metadata internally?
 - What happens when operating on a dataset on a read-only filesystem?
 - How does the tool handle datasets with both `participants.tsv` and `participants.json`?
+- How does `migrate` handle a field like `IntendedFor` that uses relative paths but the referenced files don't exist (broken references)?
+- How does `migrate` handle deprecated metadata fields that appear in inherited (higher-level) JSON sidecars vs. leaf-level ones?
+- What happens when migrating `ScanDate` to `_scans.tsv` but no `_scans.tsv` exists yet for that subject/session?
 
 ## Requirements *(mandatory)*
 
@@ -187,6 +223,9 @@ A dataset needs to be split — for example, extracting only behavioral data or 
 - **FR-013**: System MUST support `-v` / `-q` verbosity controls.
 - **FR-014**: System MUST support `--include-sourcedata` flag for operations that can extend to `sourcedata/` and `.heudiconv/`.
 - **FR-015**: Sidecar discovery MUST handle all BIDS-recognized sidecar extensions (`.json`, `.bvec`, `.bval`, `.tsv` for events, etc.) based on the schema.
+- **FR-016**: `migrate` MUST derive all deprecation knowledge from the `bidsschematools` machine-readable schema (deprecation rules, metadata definitions, enum definitions) — not from hardcoded migration tables.
+- **FR-017**: `migrate` MUST default to the current released BIDS version when no `--to` target is specified, and MUST support explicit `--to` for both 1.x and 2.0 targets.
+- **FR-018**: `migrate` MUST apply migrations cumulatively — migrating from 1.4 to 1.9 applies all intermediate deprecation fixes in version order.
 
 ### Key Entities
 
@@ -207,6 +246,7 @@ A dataset needs to be split — for example, extracting only behavioral data or 
 - **SC-004**: Library API is independently usable: all acceptance scenarios can be executed via Python imports without the CLI.
 - **SC-005**: 100% of mutating commands have both `--dry-run` and `--json` modes tested in CI.
 - **SC-006**: Test suite passes against at least 3 different BIDS schema versions (e.g., 1.8, 1.9, 2.0-dev).
+- **SC-007**: `migrate` eliminates all deprecation warnings when run on bids-examples datasets created under older schema versions (verified by running the BIDS validator before and after).
 
 ## Assumptions
 
