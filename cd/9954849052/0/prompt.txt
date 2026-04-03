@@ -1,0 +1,1 @@
+/speckit.clarify - in prior commit I added some changes to user stories -- please analyze and potentially adjust user stories to reflect better.
