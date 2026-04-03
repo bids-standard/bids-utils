@@ -33,6 +33,8 @@ note: the list has being edited (last in March 2026) to reflect discovered needs
    - just combining subjects (and failing if conflicting)
    - placing each one into a (specified) session
    - using subjects (re)mapping file
+   - related efforts inspired by working on BIDS datasets:
+     - [file-mapper](https://github.com/DCAN-Labs/file-mapper)
 - **bubble-up/condense/organize metadata** (need: medium) - move common (meta)data up in the hierarchy to make BIDS dataset easier for users to find at higher level, and not duplicated underneath (
    - [inheritance principle](https://bids-specification.readthedocs.io/en/stable/common-principles.html#the-inheritance-principle), [bids, 1.10.2 (IIRC), 2: summarization](https://github.com/bids-standard/bids-2-devel/issues/65))
      - prototype: @Lestropie initiated https://github.com/Lestropie/IP-freely (TODO: review)
