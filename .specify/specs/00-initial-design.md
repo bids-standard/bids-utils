@@ -28,12 +28,13 @@ A researcher has a BIDS file with an incorrect entity or a non-compliant name (e
 3. **Given** a file with an associated `_scans.tsv` entry, **When** the file is renamed, **Then** the corresponding row in `_scans.tsv` is updated to reflect the new filename.
 4. **Given** a file that is referenced nowhere else, **When** renamed, **Then** only the file and its sidecars are affected — no unrelated files change.
 5. **Given** a rename that would produce a filename conflicting with an existing file, **When** the user runs the command, **Then** the tool refuses with exit code 2 and a clear error message.
+6. **Given** a file which is not valid BIDS, e.g. ends with `_bold__dup-01.json`, tool operates correctly regardless that original file name is not valid BIDS.
 
 ---
 
 ### User Story 2 — Migrate a dataset toward BIDS 2.0 (Priority: P1, need: high)
 
-A lab maintaining a BIDS 1.x dataset needs to address deprecations and prepare for BIDS 2.0. They run `bids-utils migrate` which reads the machine-readable schema (via `bidsschematools`) and applies the necessary transformations (entity renames, metadata key changes, structural reorganization) in a safe, reversible manner.
+A lab maintaining a BIDS 1.x dataset needs to address deprecations and prepare for BIDS 2.0. They run `bids-utils migrate --to 2.0` which reads the machine-readable schema (via `bidsschematools`) and applies the necessary transformations (entity renames, metadata key changes, structural reorganization) in a safe manner.  Changes do not need to be reversible - use of VCS should incouraged instead to retain prior versions.
 
 **Why this priority**: BIDS 2.0 is approaching and many datasets need a migration path. A prototype already exists (bids-specification PR #2282) validating the concept.
 
@@ -50,7 +51,7 @@ A lab maintaining a BIDS 1.x dataset needs to address deprecations and prepare f
 
 ### User Story 3 — Rename a subject (Priority: P2, need: medium)
 
-A data manager needs to anonymize or re-number a subject. They run `bids-utils subject-rename sub-01 sub-99`. The tool renames the `sub-` directory, every file within it (since all carry the `sub-` prefix), updates `participants.tsv`, updates all `_scans.tsv` files, and optionally processes `sourcedata/` and `.heudiconv/`.
+A data manager needs to anonymize or re-number a subject. They run `bids-utils subject-rename sub-01 sub-99`. The tool renames the `sub-` directory, every file within it (since all carry the `sub-` prefix), updates `participants.tsv`, updates all `_scans.tsv` files, and optionally processes `sourcedata/`, `.heudiconv/` and common derivatives under `derivatives/` (via recursive calls to the same method on each derivative).
 
 **Why this priority**: Common real-world need. Composes on top of the P1 `rename` primitive. Medium priority per design doc.
 
