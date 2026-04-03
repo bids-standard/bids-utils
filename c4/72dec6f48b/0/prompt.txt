@@ -1,0 +1,5 @@
+/speckit.specify Build a Python application/library following what is described in docs/design/00-initial-design.md file
+
+---
+
+re question: the https://pypi.org/project/bids/ is placeholder pointing to pybids.  https://pypi.org/project/bids-utils/ is not yet taken.    I think let's just keep 'bids-utils' CLI entry point for now.
