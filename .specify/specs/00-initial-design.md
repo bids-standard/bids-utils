@@ -117,7 +117,7 @@ Similar to subject-rename but for session entities. Includes the special case of
 
 ### User Story 6 — Bubble-up / condense / organize metadata (Priority: P2, need: medium)
 
-A dataset has metadata duplicated across many sidecar JSON files at the leaf level. The user runs `bids-utils metadata aggregate` to hoist common key-value pairs up the BIDS inheritance hierarchy, reducing redundancy and making the dataset easier to overview.
+A dataset has metadata duplicated across many sidecar JSON files at the leaf level. The user runs `bids-utils metadata aggregate` to hoist common key-value pairs up the BIDS inheritance hierarchy, reducing redundancy and making the dataset easier to overview. Both `aggregate` and `segregate` accept optional path arguments to scope their operation (e.g., per-subject only) and support `--mode copy|move` to control whether metadata is duplicated or relocated.
 
 **Why this priority**: Medium need per design doc. Addresses a real pain point with large datasets. The `aggregate`, `segregate`, and `deduplicate` modes serve different workflows.
 
@@ -129,8 +129,8 @@ A dataset has metadata duplicated across many sidecar JSON files at the leaf lev
 2. **Given** a subject that is missing a `_bold.json` entirely (but has `_bold.nii.gz`), **When** aggregation is attempted for `RepetitionTime`, **Then** the tool does NOT aggregate that key (since the value is unknown for that subject, not merely identical).
 3. **Given** a user running `bids-utils metadata segregate`, **When** the command completes, **Then** all metadata is pushed down to leaf-level files (full self-contained sidecars per file).
 4. **Given** `bids-utils metadata audit`, **When** run, **Then** the tool reports metadata keys that are neither fully unique nor fully equivalent across files — indicating potential acquisition inconsistencies.
-5. The `aggregate` and `segregate` could be given specific path(s) to aggregate or segregate to, e.g. `aggregate sub-*/` would bubble-up common metadata per each subject only. Both commands by default would operate across all levels, thus bringing up/down common/different metadata to appropriate level in the hierarchy.
-6. Both `aggregate` and `segregate` should have an option on either to 'normalize' metadata presense, as to "copy" (duplicate) or to "move" thus making it defined uniquely (without duplication).  
+5. **Given** a dataset with multiple subjects, **When** `bids-utils metadata aggregate sub-01/` is run, **Then** only metadata within `sub-01/` is aggregated (common keys bubble up to `sub-01/` level sidecars), while other subjects' metadata is untouched. By default (no path argument), aggregation operates across all levels of the hierarchy.
+6. **Given** `bids-utils metadata aggregate --mode copy`, **When** run, **Then** common metadata is written to the higher-level sidecar but also retained in leaf-level files (normalization by duplication). **Given** `--mode move` (the default), **When** run, **Then** common metadata is removed from leaf-level files after being placed at the higher level (no duplication).
 
 ---
 
@@ -166,7 +166,7 @@ A specific run needs to be removed and subsequent run indices shifted to maintai
 
 ### User Story 9 — Merge datasets (Priority: P3, need: medium)
 
-Two BIDS datasets need to be combined — either by simply combining subjects (failing on conflicts) or by placing each dataset into a separate session.
+Two BIDS datasets need to be combined — either by simply combining subjects (failing on conflicts) or by placing each dataset into a separate session. A common workflow is incremental merge: BIDS conversion is done per subject/session producing many small datasets, which are then merged one-by-one into a growing target dataset. Merge must also handle intra-session file conflicts (e.g., additional runs from a split acquisition) and metadata conflicts (e.g., differing `participants.tsv` values or aggregated sidecar metadata).
 
 **Why this priority**: Medium per Yarik. Implementation builds on session-rename and also potentially on metadata aggregate/segregate.
 
@@ -177,9 +177,9 @@ Two BIDS datasets need to be combined — either by simply combining subjects (f
 1. **Given** two valid datasets with non-overlapping subjects, **When** `bids-utils merge datasetA datasetB --output merged/` is run, **Then** all subjects from both datasets appear in the output and the merged dataset is valid.
 2. **Given** two datasets with overlapping subject IDs, **When** merge is run without `--into-sessions`, **Then** the tool refuses with exit code 2 listing the conflicts.
 3. **Given** `--into-sessions ses-A ses-B`, **When** merge is run, **Then** each dataset's data is placed under the respective session.
-4. Actually there is a "common" workflow for such functionality: when conversion to BIDS is done per subject/session thus collecting lots of small BIDS datasets, and then "merging" them into a single dataset, potentially incrementally.
-5. Could be a case where some session was interrupted and then additional data acquired in a separate acquisition session -- we might convert it separately but then would still want to merge those extra files into the same, already present session (e.g. more _run-'s of `_bold`). Option might need to be given on how to address "conflicts", as e.g. whether to add new _run- indices.
-6. During merge there could be conflicts in e.g. different ages (across sessions) for the same subject.  Or top level sidecar metadata .json files aggregated.  One of the strategies could be 'segregate' into the next level (sub-*/) and then re-aggregate into the top thus accounting for potential differences etc.
+4. **Given** an existing target dataset and a newly converted single-subject dataset, **When** `bids-utils merge newdata/ --into existing/` is run, **Then** the new subject is added incrementally to the existing dataset without disturbing other subjects. This supports the common workflow of converting subjects one at a time and merging each into the growing dataset.
+5. **Given** a target dataset with `sub-01/ses-01/func/sub-01_ses-01_task-rest_run-01_bold.nii.gz` and a source dataset with the same subject/session containing additional BOLD runs, **When** `bids-utils merge --on-conflict add-runs` is run, **Then** the incoming files are assigned the next available `run-` indices (e.g., `run-02`) and merged into the session. **Given** `--on-conflict error` (default), **Then** the tool refuses with exit code 2 listing the conflicting filenames.
+6. **Given** two datasets with differing `participants.tsv` values for the same subject (e.g., different `age` across sessions), **When** merge is run, **Then** the tool reports the conflict. **Given** top-level sidecar metadata that differs between the datasets, **When** merge is run with `--reconcile-metadata`, **Then** the tool segregates conflicting metadata down to the appropriate level and re-aggregates to produce correct inheritance.
 
 ---
 
