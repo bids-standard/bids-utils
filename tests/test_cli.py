@@ -5,12 +5,32 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-# Import to register the rename command
-import bids_utils.cli.rename  # noqa: F401
 from bids_utils.cli import main
+
+# Expected commands that must always be present in `bids-utils --help`.
+EXPECTED_COMMANDS = [
+    "merge",
+    "metadata",
+    "migrate",
+    "remove",
+    "remove-run",
+    "rename",
+    "session-rename",
+    "split",
+    "subject-rename",
+]
 
 
 class TestCLIHelp:
+    @pytest.mark.ai_generated
+    def test_all_commands_registered(self) -> None:
+        """Every implemented command must appear in --help output."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["--help"])
+        assert result.exit_code == 0
+        for cmd in EXPECTED_COMMANDS:
+            assert cmd in result.output, f"command {cmd!r} missing from --help"
+
     @pytest.mark.ai_generated
     def test_main_help(self) -> None:
         runner = CliRunner()
