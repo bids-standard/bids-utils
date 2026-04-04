@@ -1,0 +1,58 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "1e95ab52403e",
+  "strategy": "manual-commit",
+  "branch": "00-initial-design",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "pyproject.toml",
+    "src/bids_utils/_participants.py",
+    "src/bids_utils/_scans.py",
+    "src/bids_utils/_sidecars.py",
+    "src/bids_utils/_tsv.py",
+    "src/bids_utils/_types.py",
+    "src/bids_utils/cli/_common.py",
+    "src/bids_utils/cli/merge.py",
+    "src/bids_utils/cli/metadata.py",
+    "src/bids_utils/cli/migrate.py",
+    "src/bids_utils/cli/rename.py",
+    "src/bids_utils/cli/run.py",
+    "src/bids_utils/cli/session.py",
+    "src/bids_utils/cli/split.py",
+    "src/bids_utils/cli/subject.py",
+    "src/bids_utils/merge.py",
+    "src/bids_utils/metadata.py",
+    "src/bids_utils/migrate.py",
+    "src/bids_utils/run.py",
+    "src/bids_utils/session.py",
+    "src/bids_utils/split.py",
+    "src/bids_utils/subject.py",
+    "tests/conftest.py",
+    "tests/test_cli.py",
+    "tests/test_cli_common.py",
+    "tests/test_dataset.py",
+    "tests/test_merge.py",
+    "tests/test_metadata.py",
+    "tests/test_migrate.py",
+    "tests/test_rename.py",
+    "tests/test_run.py",
+    "tests/test_scans.py",
+    "tests/test_tsv.py",
+    "tests/test_vcs.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/1e/95ab52403e/0/metadata.json",
+      "transcript": "/1e/95ab52403e/0/full.jsonl",
+      "content_hash": "/1e/95ab52403e/0/content_hash.txt",
+      "prompt": "/1e/95ab52403e/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 73,
+    "cache_creation_tokens": 212900,
+    "cache_read_tokens": 13648396,
+    "output_tokens": 11464,
+    "api_call_count": 69
+  }
+}
