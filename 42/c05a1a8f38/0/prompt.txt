@@ -1,0 +1,931 @@
+/speckit.plan proceed while also doing research on prototypes and related projects listed in  docs/design/00-initial-design.md file
+
+---
+
+<task-notification>
+<task-id>a85b40be8ad1fa95c</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-yoh-proj-bids-bids-utils/09006296-669b-4161-a3c3-d9847ff0b319/tasks/a85b40be8ad1fa95c.output</output-file>
+<status>completed</status>
+<summary>Agent "Research IP-freely metadata tool" completed</summary>
+<result>Excellent. Now let me compile a comprehensive summary of my findings:
+
+## Comprehensive Summary of the IP-freely Project
+
+### 1. Language and Architecture
+
+**Language:** Python (97.9% of codebase)
+- **Version requirement:** Python 3.9+ (uses subscripted type hints like `dict[str, BIDSFilePathList]`)
+- **Total codebase:** ~3,145 lines of Python (including tests)
+- **Core module:** ~1,287 lines (main functionality)
+- **Minimal dependencies:** Only `numpy` for numerical matrix handling; `pre-commit` for development
+
+### 2. Core Approach to Metadata Aggregation/Segregation
+
+IP-freely uses a **graph-based relational model** to handle metadata inheritance:
+
+#### Two-way Association Mapping:
+- **m4d (Metadata-for-Data):** Maps each data file to its associated metadata files, indexed by extension (`.json`, `.bval`, `.bvec`, `.tsv`)
+- **d4m (Data-for-Metadata):** Inverse mapping - metadata file paths to applicable data files
+
+#### Three Key Inheritance Behaviors:
+1. **Merge** (`.json`): Multiple JSON files are aggregated with precedence rules (last wins for key collisions)
+2. **Nearest** (`.bval`, `.bvec`): Only the nearest/most proximal metadata file is used; must be unambiguous
+3. **Forbidden** (`.tsv`): No inheritance allowed; only one metadata file per data file
+
+### 3. Capabilities
+
+IP-freely provides comprehensive metadata introspection and manipulation:
+
+**Analysis Capabilities:**
+- Detect violations of the Inheritance Principle (including subtle ones other validators miss)
+- Generate reports on metadata distribution and key-value overrides (where one JSON file's value supersedes another)
+- Create complete data-metadata association graphs in JSON format
+- Extract properly resolved metadata accounting for complex inheritance chains
+- Identify ambiguities in metadata file selection (e.g., which `.bval` file to use when multiple exist)
+
+**Conversion Capabilities:**
+- Convert datasets to eliminate all manifestations of the Inheritance Principle
+- Support multiple ruleset-based conversions (e.g., "forbidden" ruleset for strict 1:1 data-metadata pairing)
+
+**Validation Capabilities:**
+- Test against multiple BIDS Inheritance Principle rulesets
+- Report conformity of BIDS validators against expected outcomes
+
+### 4. Inheritance Principle Handling
+
+IP-freely implements a **ruleset-based system** with multiple versions of the Inheritance Principle:
+
+#### Implemented Rulesets:
+- **1.1.x / 1.7.x:** Original BIDS IP (unique metadata per filesystem level, JSON field overloading permitted)
+- **1.11.x:** Same but treats key-value overrides as warnings instead of permitted
+- **PR1003:** Ordered (disambiguated by entity count) multiple metadata files allowed
+- **I1195:** Any number of JSONs but no key-value overloading permitted
+- **forbidden:** Strictest - one metadata file per data file, no inheritance at all
+
+#### Core Rules Parameterization:
+Each ruleset defines:
+- `json_inheritance_within_dir`: How multiple JSONs at one level are permitted
+- `nonjson_inheritance_within_dir`: Same for other metadata file types
+- `keyvalue_override`: Whether JSON field collisions are permitted/warning/violation
+- `permit_multiple_metadata_per_data`: Multi-inheritance across directories
+- `permit_multiple_data_per_metadata`: One metadata file serving multiple data files
+- `permit_nonsidecar`: Whether metadata files must be "sidecars" (share entity stem)
+- `meta_path_check`: Validation of metadata file location in hierarchy
+
+### 5. Limitations
+
+- **Early development stage:** Project acknowledges being in initial development phase
+- **Test data versioning:** Test data and test definitions are not yet robustly version-matched
+- **Conversion limited:** Only "forbidden" ruleset fully implemented for conversion; "I1195" partially implemented
+- **File type coverage:** Limited to BIDS-standard metadata types (`.json`, `.tsv`, `.bval`, `.bvec`)
+- **BIDS entity parsing:** Relies on filename parsing; no formal BIDS schema integration
+- **Precedence ordering:** For `.json` files with potential ordering ambiguity, relies on filesystem traversal order which can be implementation-dependent
+
+### 6. Technical Implementation Details
+
+#### File Path Handling:
+- Custom `BIDSFilePath` class parses entities from filenames
+- `BIDSEntity` represents key-value pairs (e.g., `sub-01`)
+- Relative path tracking for portability
+
+#### Applicability Rules:
+- Metadata file must be in an ancestor directory of data file
+- Entity matching: metadata file entities must match or be subset of data file entities
+- Suffix matching: metadata file suffix (e.g., `bold`, `dwi`) must match data file suffix
+
+#### Metadata Loading:
+- **JSON:** `load_keyvalues()` merges multiple files sequentially (last-write-wins semantics)
+- **TSV:** Parsed as CSV with tab delimiter
+- **Numerical matrices:** `.bval`, `.bvec` loaded via NumPy
+
+#### Graph Pruning:
+- Full unpruned graph tracks all possible associations
+- Pruning applies inheritance behavior rules to yield final association set
+- Detects ambiguities and violations during pruning
+
+### 7. What bids-utils Can Learn/Reuse
+
+#### Direct Reusable Components:
+1. **Ruleset architecture:** The enum-based ruleset system is cleanly parameterized and easily extensible for new IP versions
+2. **Graph data structure:** The bidirectional m4d/d4m mapping is elegant for complex queries about data-metadata relationships
+3. **Applicability logic:** The filename and path-based matching rules are well-factored in `utils/applicability.py`
+4. **Entity parsing:** The `BIDSEntity` and `BIDSFilePath` classes could serve as foundation for entity manipulation
+
+#### Methodological Approaches:
+1. **Two-way mapping:** Consider using m4d/d4m pattern for any tool needing to track complex file associations
+2. **Metadata loading abstraction:** `load_metadata()` and extension-based dispatch patterns are reusable
+3. **Ruleset-driven validation:** Instead of hardcoding BIDS version logic, parameterize via rulesets
+
+#### Areas for Enhancement in bids-utils:
+1. **No schema integration:** IP-freely is purely filesystem-based; bids-utils could add JSON schema validation
+2. **Sidecar detection:** Currently simple stem matching; could be enhanced with suffix registry
+3. **Metadata precedence:** Currently relies on filesystem order; could be made deterministic with explicit ordering rules
+4. **Conversion logic:** The "forbidden" export logic is minimal; bids-utils could provide more sophisticated reorganization strategies
+
+#### Code Quality Notes:
+- Well-organized module structure with clear separation of concerns
+- Good use of type hints (Python 3.9+ subscripted types)
+- Dataclass usage for configuration (`Ruleset`)
+- Enum usage for fixed option sets (`InheritanceBehaviour`, `KeyvalueOverride`)
+- Comprehensive docstring comments in code
+- Pre-commit setup for code quality
+
+### 8. Integration with bids-utils
+
+IP-freely could serve bids-utils as:
+1. **Reference implementation** for Inheritance Principle handling
+2. **Foundation library** - could be imported as a dependency for metadata resolution
+3. **Validation backend** - leverage its detection of IP violations in bids-utils validation pipeline
+4. **Conversion engine** - use its export functions for dataset reorganization workflows
+
+The project is well-suited as a reusable component because of its minimal dependencies and clear API (the two main functions: `metafiles_for_datafile()` and `load_keyvalues()`).</result>
+<usage><total_tokens>37259</total_tokens><tool_uses>23</tool_uses><duration_ms>48695</duration_ms></usage>
+</task-notification>
+Full transcript available at: /tmp/claude-1000/-home-yoh-proj-bids-bids-utils/09006296-669b-4161-a3c3-d9847ff0b319/tasks/a85b40be8ad1fa95c.output
+
+---
+
+<task-notification>
+<task-id>a7220ea90c3588a7f</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-yoh-proj-bids-bids-utils/09006296-669b-4161-a3c3-d9847ff0b319/tasks/a7220ea90c3588a7f.output</output-file>
+<status>completed</status>
+<summary>Agent "Research rename-tool and file-mapper" completed</summary>
+<result>Excellent. Now I have the full context. Let me compile a comprehensive research report on all the projects and what bids-utils can learn from them.
+
+## Research Report: Related Projects for bids-utils
+
+Based on my investigation of the projects mentioned in the bids-utils design document, here's what each brings to the table and lessons for bids-utils:
+
+---
+
+### 1. **rename-tool** by @just-meng
+**Repository**: https://github.com/just-meng/rename-tool
+
+**Language**: Python
+
+**What it does**: A batch file and directory renaming utility with pattern-based transformations. It automatically infers operation modes (replace, prefix, suffix, delete, number offset, full replace, regex) from two arguments rather than requiring explicit flags.
+
+**Key Approach**:
+- Mode inference from arguments (intuitive UX)
+- Collision-safe reordering to prevent overwrites during batch operations
+- Works on both files and directories
+- DataLad integration for provenance tracking and reversible operations
+
+**Notable Features**:
+- Number offsetting (e.g., `_T1 → _T38`) for reindexing sequences — critical for BIDS trial renaming
+- Never overwrites existing files by default
+- Safer than Linux `rename` command for complex patterns
+
+**Limitations**: 
+- No explicit documented limitations, but single-focused tool (renaming only)
+
+**What bids-utils can learn**:
+- User Story 1 (rename file) could benefit from intelligent pattern inference for common BIDS transformations
+- Number offsetting logic would be useful for User Story 8 (remove-run with `--shift` reindexing)
+- DataLad integration pattern is already mentioned in bids-utils assumptions but `rename-tool` demonstrates it in practice
+- The collision-safe approach is essential for bids-utils' `--dry-run` validation (SC-002)
+
+---
+
+### 2. **file-mapper** by DCAN-Labs
+**Repository**: https://github.com/DCAN-Labs/file-mapper
+
+**Language**: Python 3.7+
+
+**What it does**: A utility for copying, moving, or symlinking files from one directory to another using JSON configuration files. Maps source paths to destinations with template variable replacement.
+
+**Architecture**:
+- CLI interface (`file_mapper_script.py`)
+- GUI interface (`file_mapper_gui.py`)
+- Configuration-driven via JSON (keys = sources, values = destinations)
+
+**Key Features**:
+- Multiple actions: copy, move, symlink, move+symlink combinations
+- Absolute and relative path handling
+- Template variable replacement (e.g., `{SUBJECT}=sub-01`)
+- Skip-errors flag for graceful continuation
+- Overwrite protection
+- Sidecar support (JSON metadata files)
+- Relative symlink creation for portability
+- Test mode (dry-run) with preview of operations
+- Specifically designed for BIDS dataset reorganization
+
+**Limitations**:
+- JSON-based configuration (less flexible than programmatic API)
+- Primarily GUI-focused with CLI as secondary interface
+
+**What bids-utils can learn**:
+- User Story 9 (merge datasets) and User Story 10 (split datasets) could use a mapping-based approach
+- Template variable replacement pattern useful for systematic entity transformations
+- The GUI + CLI dual interface shows value in accessibility (though bids-utils targets Python library + CLI)
+- Sidecar handling patterns apply directly to bids-utils' FR-015 (sidecar discovery)
+- Dry-run + preview pattern aligns with bids-utils' FR-003 requirement
+- Test mode implementation provides a reference for bids-utils' `--dry-run` output format
+
+---
+
+### 3. **spacetop rename_file** script
+**Repository**: https://github.com/spatialtopology/ds005256/blob/master/code/rename_file
+
+**Language**: Bash (shell script)
+
+**What it does**: A specialized helper utility for renaming BIDS files while maintaining data integrity across related files in a neuroimaging dataset.
+
+**Key Approach**:
+- Uses `git mv` for VCS awareness (User Story 1 requirement: FR-004)
+- Multi-step renaming with automatic metadata propagation
+- Ensures bidirectional consistency
+
+**Notable Features**:
+- Primary rename via `git mv`
+- Automatic updates to `*_scans.tsv` entries referencing the renamed file
+- Sidecar JSON updates (e.g., fieldmap references)
+- Git residual cleanup
+- `--swap` flag: exchange two filenames via temp file (useful for safe reordering)
+- `--all-extensions` flag: rename all related variants (`.nii.gz`, `.json`, `.tsv`)
+- `--dry-run` flag: preview without execution
+- Error checking ensures source/destination in same directory
+- Tight integration with `datalad` and `git-annex`
+
+**Limitations**:
+- Bash implementation (not portable to Windows)
+- Single-purpose (renaming only)
+- Hard to extend or test
+
+**What bids-utils can learn**:
+- Direct model for User Story 1 (rename file) implementation strategy
+- The `--swap` approach could solve race conditions in batch reordering (e.g., Story 8 run re-indexing)
+- Multi-step consistency updates pattern: rename → update `_scans.tsv` → update sidecars → verify VCS state
+- Error checking for file location (same directory requirement) prevents structural corruption
+- Integration sequence with `git-annex` and `datalad` is reference implementation for FR-004
+- The `--all-extensions` concept maps to FR-015 sidecar discovery
+
+---
+
+### 4. **copier-astral**
+**Repository**: https://github.com/ritwiktiwari/copier-astral
+
+**Type**: Copier template for Python project scaffolding
+
+**What it does**: Opinionated bootstrap template for new Python projects with batteries-included tooling.
+
+**Language Stack**:
+- Package management: **uv** (positioned as 10-100x faster than pip)
+- Type checking: **ty** (Astral's new fast type checker)
+- Linting/formatting: **ruff** (modern replacement for flake8, black, isort)
+- Testing: **pytest** with **hatch** for multi-version testing
+- Documentation: **MkDocs** with Material theme and mkdocstrings
+- CLI framework: **Typer** (type-hint based, minimal boilerplate)
+
+**Additional Tools**:
+- Git hooks (pre-commit)
+- Changelog generation (git-cliff)
+- Secret detection (gitleaks)
+- Dependency vulnerability scanning (pysentry-rs)
+- Static analysis (semgrep)
+- Automated dependency updates (Renovate)
+
+**Scaffolding Approach**:
+- Copier with custom Jinja2 extensions
+- Auto-detects git user information
+- Generates slugified package names
+- GitHub Actions + Docker containerization included
+
+**Limitations**:
+- Opinionated (not customizable for different preferences)
+- Requires Copier tool
+- Astral-specific tooling (ty, ruff) may not suit all projects
+
+**What bids-utils can learn**:
+- The constitution already specifies this stack (uv, ruff, mypy, mkdocs, tox)
+- `copier-astral` as a template reference validates bids-utils' tooling choices
+- Could serve as a starting point if bids-utils repository was scaffolded from it
+- Typer framework for CLI design would simplify User Story 1–10 command implementations
+- The inclusion of security scanning (gitleaks, semgrep) + vulnerability tracking (pysentry-rs) suggests patterns for dependency management in a data-sensitive tool
+
+---
+
+### 5. **NLeSC python-template**
+**Repository**: https://github.com/NLeSC/python-template
+
+**Type**: Copier-based template for research software packages
+
+**What it does**: Scaffolds Python packages following research software best practices from the Netherlands eScience Center.
+
+**Scaffolding Approach**:
+- Copier-based with three customization levels: Minimum, Recommended, Let me choose
+- Supports `copier update` for incremental template updates
+- Targets 3 most recent Python versions per SPEC 0
+
+**Key Features**:
+- Boilerplate unit tests and documentation
+- GitHub Actions workflows (CI, testing, linting)
+- Code style checking with **Ruff**
+- README templates (user + developer)
+- Automatic GitHub issue generation with setup instructions
+- SonarCloud integration for code quality metrics
+- FAIR software compliance badging
+- Citation support (Zenodo integration guidance)
+- Comprehensive governance docs (CODE_OF_CONDUCT.md, CONTRIBUTING.md)
+- Pre-commit hooks for early lint detection
+- EditorConfig standardization
+- Apache 2.0 license setup by default
+
+**Best Practices Included**:
+- Multi-version Python testing
+- Code quality metrics
+- Accessibility to new contributors (setup issues)
+- Research software standards alignment
+- Citation/reproducibility support
+
+**Limitations**:
+- Research-science-specific (may be over-engineered for smaller projects)
+- Opinionated about governance/licensing
+
+**What bids-utils can learn**:
+- Research software best practices directly applicable (bids-utils is scientific software)
+- SonarCloud integration provides code quality metrics beyond ruff/mypy
+- Zenodo/citation integration useful since bids-utils will be published for scientific use
+- FAIR software compliance check aligns with BIDS philosophy
+- The "Let me choose" customization level shows value in balanced prescriptiveness
+- Multi-version Python testing (SC-006 requires "at least 3 different BIDS schema versions")
+- Governance documents (CONTRIBUTING.md) important for community-driven tool
+
+---
+
+### 6. **substrate**
+**Repository**: https://github.com/superlinear-ai/substrate
+
+**Type**: Modern Copier template for Python packages and applications
+
+**What it does**: Scaffolds Python projects with pre-configured tooling and modern development practices.
+
+**Approach**:
+- Opinionated, batteries-included template
+- Supports local development + cloud environments (Dev Containers, GitHub Codespaces)
+- Cross-platform compatibility (Linux, macOS, Windows)
+
+**Language of Template**: Jinja (93.5%) + Shell (6.5%), generates Python projects
+
+**Key Features**:
+
+*Dependency & Package Management*:
+- **uv** for packaging and dependency management
+- PyPI integration for publishing
+
+*Code Quality*:
+- Code formatting and linting with **ruff** (via pre-commit hooks)
+- Type checking with **ty**
+- Test coverage tracking
+
+*Release & Documentation*:
+- Semantic versioning with Commitizen
+- Automated changelog management
+- MkDocs-based documentation with GitHub Pages publishing
+
+*Automation*:
+- GitHub Actions or GitLab CI/CD pipelines
+- Dependabot for dependency updates
+- Optional Conventional Commits support
+
+*Development Environment*:
+- Dev Container support for reproducible environments
+- GitHub Codespaces integration
+
+**Limitations**:
+- Another opinionated template (many similar options exist)
+- Conventional Commits requirement may not suit all projects
+
+**What bids-utils can learn**:
+- Dev Container pattern useful for reproducible development environment (important for a data-centric tool)
+- Semantic versioning + Commitizen aligns with auto-release workflows
+- GitHub Pages publishing pattern could host bids-utils documentation
+- Conventional Commits support (optional) useful for changelog generation (git-cliff mentioned in copier-astral)
+- Pre-commit hook integration for linting before commit reduces CI burden
+- Coverage tracking integrates well with tox testing approach
+- Cross-platform emphasis important since bids-utils must run on all OSes
+
+---
+
+## Summary: What bids-utils Should Adopt
+
+### From **rename-tool**:
+1. **Pattern-inference UX** for entity transformations (reduce CLI verbosity)
+2. **Collision-safe reordering** algorithm for batch operations
+3. **DataLad integration pattern** for provenance (already in scope per FR-004)
+
+### From **file-mapper**:
+1. **Mapping/configuration-driven approach** for dataset merging/splitting (User Stories 9–10)
+2. **Template variable replacement** for systematic transformations
+3. **Sidecar handling patterns** and discovery logic
+4. **Dry-run + preview format** reference implementation
+
+### From **spacetop rename_file**:
+1. **Reference implementation for User Story 1** (rename with `_scans.tsv` + sidecar updates)
+2. **Swap-via-temp-file pattern** for safe batch re-indexing
+3. **Multi-step consistency validation** sequence
+4. **git-annex / DataLad integration specifics**
+
+### From **copier templates** (astral, NLeSC, substrate):
+1. **Validate chosen toolchain**: uv, ruff, mypy, mkdocs, tox — all confirmed as strong choices
+2. **Adopt SonarCloud** for code quality metrics (beyond linting)
+3. **Include Zenodo/citation support** for research software
+4. **Dev Container pattern** for reproducible development
+5. **Multi-version testing** against BIDS schemas (SC-006 requirement)
+6. **Governance documents** (CONTRIBUTING.md) for community engagement
+7. **Semantic versioning + Commitizen** for automated release workflows
+
+### Key Architectural Patterns to Adopt:
+- **Library + CLI separation** (FR-001, FR-002) — validate with file-mapper's dual interface approach
+- **Dry-run implementation** — use spacetop's multi-step update pattern as reference
+- **VCS awareness** (FR-004) — implement git/git-annex detection sequence from spacetop
+- **Sidecar discovery** (FR-015) — codify patterns from file-mapper + spacetop into reusable module
+- **Schema-driven operations** (FR-009, FR-016) — bidsschematools integration validated by design, not other projects
+
+---
+
+## File Paths for Reference
+
+- **bids-utils design document**: `/home/yoh/proj/bids/bids-utils/.specify/specs/00-initial-design.md`
+- All project repositories accessible via links above (public GitHub repos)</result>
+<usage><total_tokens>24770</total_tokens><tool_uses>9</tool_uses><duration_ms>58874</duration_ms></usage>
+</task-notification>
+Full transcript available at: /tmp/claude-1000/-home-yoh-proj-bids-bids-utils/09006296-669b-4161-a3c3-d9847ff0b319/tasks/a7220ea90c3588a7f.output
+
+---
+
+<task-notification>
+<task-id>a81b114ed7954d2a9</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-yoh-proj-bids-bids-utils/09006296-669b-4161-a3c3-d9847ff0b319/tasks/a81b114ed7954d2a9.output</output-file>
+<status>completed</status>
+<summary>Agent "Research bidsschematools API" completed</summary>
+<result>Perfect! Now I have enough information. Let me compile a comprehensive research summary.
+
+## BIDS Schema Tools Research Summary
+
+I've completed a thorough investigation of the **bidsschematools** package. Here's what I found:
+
+### Package Information
+
+**Current Version:** 1.2.2 (as of March 2026)  
+**Package Name:** `bidsschematools`  
+**Distribution:** PyPI (installable via `pip install bidsschematools`)  
+**Location:** Embedded in the [bids-specification repository](https://github.com/bids-standard/bids-specification) at `tools/schemacode/`  
+**License:** MIT
+
+---
+
+### Core API Overview
+
+#### **Primary Entry Point: `load_schema()`**
+
+```python
+from bidsschematools import schema
+
+# Load default bundled schema
+schema_obj = schema.load_schema()
+
+# Load from custom YAML directory
+schema_obj = schema.load_schema("/path/to/schema")
+
+# Load from JSON file
+schema_obj = schema.load_schema("/path/to/schema.json")
+```
+
+The function is **cached** (`@lru_cache`), so repeated calls with the same path return the cached result.
+
+**Returns:** A `Namespace` object (dict-like structure) with three main sections.
+
+---
+
+### Schema Structure and Navigation
+
+The loaded schema contains three top-level sections:
+
+#### **1. `schema.objects`**
+Contains 12 sub-namespaces defining semantic terms:
+- **`entities`** - Name-value pairs in filenames (e.g., `sub`, `ses`, `task`)
+- **`metadata`** - Name-value pairs in JSON sidecars
+- **`suffixes`** - Filename suffixes describing file contents (e.g., `bold`, `anat`)
+- **`datatypes`** - Subdirectories organizing files by type (e.g., `anat`, `func`, `meg`)
+- **`extensions`** - File extensions (e.g., `.nii.gz`, `.json`)
+- **`columns`** - TSV file column definitions
+- **`enums`** - Enumerated value definitions
+- **`formats`** - Value format constraints
+- **`modalities`** - Data recording categories
+- **`common_principles`** - Universal BIDS terms
+
+#### **2. `schema.rules`**
+Defines constraints and validation requirements:
+- **`rules.files`** - Filename requirements by datatype (e.g., `rules.files.raw.anat`)
+- **`rules.sidecars`** - JSON metadata field specifications
+- **`rules.checks`** - Validation rules with error codes
+- **`rules.tabular_data`** - TSV column requirements
+
+#### **3. `schema.meta`**
+Provides metadata for interpreting the schema, including version information.
+
+#### **Access Patterns**
+
+```python
+# Dot notation
+version = schema.bids_version
+schema_ver = schema.schema_version
+
+# Bracket notation
+version = schema['bids_version']
+
+# Nested access
+entity = schema.objects.entities.subject
+metadata_field = schema.objects.metadata.FlipAngle
+suffix = schema.objects.suffixes.bold
+
+# Complex paths
+rules = schema.rules.files.raw.anat
+check_rule = schema.rules.checks.mri.PhasePartUnits
+```
+
+---
+
+### API Functions
+
+#### **Schema Loading & Export**
+- **`load_schema(schema_path=None)`** - Load schema (cached). Path can be YAML directory, JSON file, or None for bundled default.
+- **`export_schema(schema)`** - Serialize schema to JSON string. Returns the schema as a JSON string via `.to_json()`.
+- **`dereference(schema)`** - Replace schema references with actual content (automatically called by `load_schema` for YAML sources).
+- **`flatten_enums(schema)`** - Simplify enum structures by merging conditions.
+
+#### **Validation & Inspection**
+- **`validate_schema(schema)`** - Validate schema against BIDS metaschema.
+- **`get_schema_validator()`** - Retrieve the JSON schema validator.
+- **`filter_schema(schema, keyword)`** - Filter schema by keyword criteria.
+
+#### **Rule Processing** (in `rules.py`)
+- **`regexify_filename_rules(rule_group, schema, depth)`** - Convert filename rules to regex patterns.
+- **`regexify_all()`** - Create full path regexes for all BIDS specification files; returns (patterns, schema).
+
+#### **Version Utilities**
+- **`_get_schema_version()`** - Extract schema format version from `SCHEMA_VERSION` file.
+- **`_get_bids_version()`** - Extract BIDS specification version from `BIDS_VERSION` file.
+
+---
+
+### Deprecations & Requirement Levels
+
+Deprecated elements in the schema are marked with a `deprecated` level field. The BIDS schema recognizes four requirement levels:
+- **REQUIRED** - Must be present
+- **RECOMMENDED** - Should be present  
+- **OPTIONAL** - May be present
+- **DEPRECATED** - Previously required/recommended but no longer
+
+Validators should treat deprecated elements as warnings rather than errors.
+
+---
+
+### Version Support
+
+- **Single Bundled Version**: Each `bidsschematools` release includes one specific BIDS schema version bundled with it.
+- **Version Selection**: To work with different BIDS versions (1.8, 1.9, 2.0, etc.), you can:
+  1. Install different versions of `bidsschematools` (each bundles a corresponding BIDS schema)
+  2. Load schema from external sources: `schema.load_schema("https://bids-specification.readthedocs.io/en/v1.8.0/schema.json")`
+  3. Load from a custom schema directory with a specific BIDS version
+
+The schema files are accessed through symlinks in `tools/schemacode/src/bidsschematools/data/`:
+- `schema/` - Symlink to actual schema directory
+- `metaschema.json` - Symlink to metaschema for validation
+
+---
+
+### Key Characteristics
+
+**Lightweight:** Minimizes dependencies; serves as the reference parsing implementation  
+**Dict-like:** Namespace objects support both dot notation and bracket notation for property access  
+**Cached:** `load_schema()` caches results, so multiple calls with same path are efficient  
+**CLI Available:** Command-line interface with `bst export` and other bindings
+
+---
+
+### How `bids-utils` Should Interact
+
+1. **Schema Loading**: Use `bidsschematools.schema.load_schema()` to load the bundled or custom schema once at initialization
+2. **Entity/Metadata Access**: Access definitions via `schema.objects.entities.<name>`, `schema.objects.metadata.<name>`, etc.
+3. **Validation Rules**: Access validation constraints via `schema.rules.*` for filename and sidecar rules
+4. **Rule Processing**: Use `bidsschematools.rules.regexify_*()` functions for filename validation regex generation
+5. **Version Awareness**: Check `schema.bids_version` and `schema.schema_version` to understand which BIDS version is loaded
+6. **Deprecation Handling**: Check for `deprecated` field in schema objects when accessing entities/metadata
+7. **Custom Schema**: Support loading from custom schema paths for testing or custom BIDS configurations
+
+---
+
+### Important Notes for Integration
+
+- The schema is a **read-only resource** - don't attempt to modify the loaded schema object
+- Use **caching effectively** - load the schema once and pass it around rather than reloading
+- **Version mismatch awareness** - document which version of bidsschematools (and thus BIDS schema) your tool expects
+- **Dereferencing happens automatically** for YAML sources but not JSON sources
+- The `Namespace` type is **dict-compatible** but also supports attribute access, making it flexible for navigation
+
+---
+
+### Sources:
+- [PyPI - bidsschematools](https://pypi.org/project/bidsschematools/)
+- [BIDS Schema Tools Documentation](https://bidsschematools.readthedocs.io/en/latest/)
+- [BIDS Schema Tools - Schema Description](https://bidsschematools.readthedocs.io/en/latest/description.html)
+- [BIDS Specification Repository](https://github.com/bids-standard/bids-specification)
+- [BIDS Schema Location (src/schema)](https://github.com/bids-standard/bids-specification/tree/master/src/schema)
+- [bidsschematools Source Code](https://github.com/bids-standard/bids-specification/tree/master/tools/schemacode/src/bidsschematools)
+- [BIDS Validator 2.0 Blog Post](https://bids.neuroimaging.io/blog/2024/11/13/bids-validator-2.html)</result>
+<usage><total_tokens>31084</total_tokens><tool_uses>35</tool_uses><duration_ms>125740</duration_ms></usage>
+</task-notification>
+Full transcript available at: /tmp/claude-1000/-home-yoh-proj-bids-bids-utils/09006296-669b-4161-a3c3-d9847ff0b319/tasks/a81b114ed7954d2a9.output
+
+---
+
+<task-notification>
+<task-id>a8f78f724f577e426</task-id>
+<tool-use-id>toolu_01L1yjYnfcmYLBeruHHWWMh1</tool-use-id>
+<output-file>/tmp/claude-1000/-home-yoh-proj-bids-bids-utils/09006296-669b-4161-a3c3-d9847ff0b319/tasks/a8f78f724f577e426.output</output-file>
+<status>completed</status>
+<summary>Agent "Research BIDS 2.0 migration prototype" completed</summary>
+<result>Perfect! Now I have all the information needed. Let me compile a comprehensive summary:
+
+## BIDS 2.0 Migration Prototype Research Summary
+
+Based on my analysis of the referenced PRs, bidsschematools package, and the bids-utils design document, here's a thorough breakdown:
+
+---
+
+### 1. ARCHITECTURE AND APPROACH OF EXISTING MIGRATION PROTOTYPE
+
+#### **PR #2282 - "bst migrate" Command** (Current State)
+The migration prototype is implemented in the `bidsschematools` package with the following architecture:
+
+**Framework Structure:**
+- **Migration Registry Pattern**: Uses decorator-based registration for modular, versioned migrations
+- **Decorator Pattern**: `@registry.register(name="...", version="1.10.0", description="...")`
+- **Dry-run Support**: Full preview capability showing planned changes without modifying files
+- **JSON-Safe Operations**: Careful handling of JSON read/write with error logging
+- **Dataset Discovery**: Uses `rglob()` to recursively locate `dataset_description.json` files, supporting arbitrary nesting
+
+**Command-Line Interface:**
+```bash
+bst migrate list                    # Display available migrations
+bst migrate run [name] [path]      # Execute specific migration with --dry-run support
+bst migrate all [path] --skip [name] # Run all migrations with selective exclusion
+```
+
+#### **PR #1775 - Original BIDS 2.0 Migration Base** (Prior Art)
+Used a **script-based transformation approach** as the foundation:
+
+**Approach Details:**
+- **Patch Application System**: Sequential numeric ordering (`01-01-*`, `01-02-*`) processed via bash script `apply_all`
+- **Dual Patch Types**: Executable shell scripts for custom logic + standard unified `.patch` files
+- **Tested via CI**: GitHub Actions automatically applies patches and validates against BIDS validator
+- **Branch Output**: Results pushed to `bids-2.0-patched` branch for validation
+
+**Initial Transformation Implemented:**
+- Primary focus: Renaming "participants" to "subjects" throughout specification
+- Careful exclusion: Version history, licenses, migration code itself
+
+---
+
+### 2. TRANSFORMATIONS HANDLED BY EXISTING PROTOTYPE
+
+**PR #2282 Currently Implements Three Migrations:**
+
+1. **`standardize_generatedby` (v1.10.0)**
+   - Converts legacy provenance fields → standardized BEP028 format
+   - Legacy fields: `Pipeline`, `Software`, `Tool`, `Provenance`
+   - Target: `GeneratedBy` array with proper structure
+   - Scope: Entire dataset traversal via JSON sidecar scanning
+
+2. **`fix_inheritance_overloading` (v1.10.1)**
+   - Detects deprecated inheritance patterns where identical fields have different values across inheritance scopes
+   - Validates compliance with inheritance principle
+   - Reports conflicts for user review
+
+3. **`fix_tsv_entity_prefix` (v1.10.1)**
+   - Validates entity prefix consistency in TSV column headers
+   - Ensures naming conventions match BIDS schema requirements
+
+**Design Document (bids-utils) Indicates Required Transformations for Full BIDS 2.0 Migration:**
+
+Metadata field replacements:
+- `BasedOn` → `Sources`
+- `RawSources` → `Sources`
+- `ScanDate` → `acq_time` column in `_scans.tsv` (PET, since 1.6.0)
+- `DCOffsetCorrection` → `SoftwareFilters` (iEEG)
+- `AcquisitionDuration` → `FrameAcquisitionDuration` (BOLD)
+
+Path format migrations:
+- `IntendedFor`, `AssociatedEmptyRoom`, `Sources` fields: relative paths → BIDS URIs (`bids::` scheme) (since 1.8.0)
+
+Value format changes:
+- `DatasetDOI`: bare DOIs → URI format (since 1.8.0)
+
+Suffix deprecations:
+- `_phase` → `_part-phase_bold` (since 1.5.0)
+- Deprecated anatomical suffixes: `T2star`, `FLASH`, `PD`
+
+Coordinate system value renames:
+- `ElektaNeuromag` → `NeuromagElektaMEGIN`
+- Template identifier updates: `fsaverage3-6` → `fsaverage`, `fsaveragesym` → `fsaverageSym`, versioned `UNCInfant*` identifiers
+
+---
+
+### 3. LANGUAGE AND IMPLEMENTATION DETAILS
+
+**Language:** Python (leveraging existing BIDS Schema Tools infrastructure)
+
+**Code Quality & Test Coverage:**
+- 29 new tests added (119 total passing)
+- All ruff formatting, YAML linting, and codespell validation passing
+- Performance optimization: Uses sets instead of lists for O(1) lookups during validation
+
+**Migration Function Contract:**
+```python
+@registry.register(name="...", version="...", description="...")
+def migration_function(dataset_path):
+    return {
+        "success": bool,           # Operation outcome
+        "modified_files": list,    # Affected file paths
+        "message": str            # Status details
+    }
+```
+
+---
+
+### 4. BIDSSCHEMATOOLS PACKAGE - AVAILABLE SCHEMA APIS
+
+#### **Core Modules Available:**
+
+**`bidsschematools.schema`** - Main Schema Access
+- `load_schema(schema_path)` - Load schema from path or bundled version (cached)
+- `Namespace` class - Dict-like container with methods:
+  - `from_json()` - Load from JSON text
+  - `from_directory()` - Load from YAML directory
+  - `to_json()` - Export to JSON
+  - `to_dict()` - Convert to dictionary
+- `dereference(namespace)` - Replace `$ref` references with actual content
+- `flatten_enums(namespace)` - Consolidate multiple enum conditions
+- `filter_schema(schema, **kwargs)` - Filter by arbitrary criteria
+- `validate_schema(schema)` - Validate against BIDS metaschema
+- `export_schema(schema)` - Serialize to JSON
+- Version access: `_get_bids_version()`, `_get_schema_version()`
+
+**`bidsschematools.rules`** - Rule Processing
+- Rule definitions with properties: `path`, `stem`, `entities`, `datatypes`, `extensions`, `level`
+- Converts rules to regular expressions
+- `regexify_all()` - Converts schema rules into regex patterns with `mandatory` boolean flags
+
+**`bidsschematools.validator`** - Validation
+- `validate_bids()` - Main validation entry point with:
+  - Path validation against schema regex patterns
+  - Report generation
+  - File exclusion options
+- `validate_all()` - Pattern matching helper
+- `_get_paths()` - Path retrieval respecting `.bidsignore`
+- `log_errors()` - Error reporting
+- `write_report()` - Report generation
+
+**`bidsschematools.render`** - Output Generation
+- `tables` - Table rendering
+- `text` - Text output formatting
+- `tsv` - TSV format export
+- `utils` - Rendering utilities
+
+**`bidsschematools.types`** - Type Definitions
+- `context` - Context types
+- `namespace` - Namespace handling
+- `protocols` - Protocol specifications
+
+**`bidsschematools.utils`** - Utility Functions
+
+#### **Machine-Readable Schema Files (Located at `src/schema/`):**
+
+**`objects/metadata.yaml`** - Metadata Field Definitions
+- Properties: `name`, `display_name`, `description`, `type`, `constraints` (min/max, enum, format)
+- Includes deprecated field indicators with replacement guidance
+- Context-specific variations (e.g., `AnatomicalLandmarkCoordinates__mri` for MRI-specific definitions)
+
+**`rules/checks/deprecations.yml`** - Deprecation Rule Definitions
+- Fields: `issue`, `code`, `message`, `level` (e.g., warning), `selectors`, `checks`
+- Supports reference templates (`$ref`) for reusing across multiple fields
+- Example: `ELEKTA_NEUROMAG_DEPRECATED` rule applied to coordinate systems
+
+**`enums.yaml`** - Enumeration Values
+- Defines valid values for constrained properties
+- Includes deprecated enum values with replacement guidance
+
+---
+
+### 5. WHAT CAN BE REUSED vs. NEEDS TO BE BUILT FRESH
+
+#### **STRONGLY REUSABLE:**
+
+1. **Migration Registry Framework** (from PR #2282)
+   - Decorator-based registration is clean, extensible, and already tested
+   - Can be directly imported/extended in bids-utils
+   - Dry-run infrastructure already in place
+
+2. **bidsschematools Schema Access APIs**
+   - `load_schema()` for loading versioned schemas
+   - `Namespace` for traversing schema definitions
+   - Rule processing for regex validation
+   - All deprecation metadata is machine-readable and queryable
+
+3. **BIDS Schema Definition Files**
+   - `deprecations.yml` is the authoritative source for all deprecations
+   - `metadata.yaml` contains field definitions with replacement guidance
+   - Both are parseable YAML that can drive migrations programmatically
+   - **Design requirement FR-016/FR-017 explicitly demand** deriving all deprecation knowledge from these files, not hardcoding
+
+4. **Dry-run and JSON Output Infrastructure**
+   - PR #2282 already implements safe JSON operations
+   - Dry-run mode with preview output is functional
+   - Can be extended with `--json` formatted output
+
+#### **MUST BE BUILT FRESH FOR BIDS-UTILS:**
+
+1. **File and Directory Rename Operations**
+   - bidsschematools focuses on validation, not file manipulation
+   - bids-utils needs comprehensive file/directory rename with sidecar discovery
+   - Must handle: `.json`, `.bvec`, `.bval`, `.tsv` (events), and schema-defined extensions
+   - Must support VCS awareness (git, git-annex, DataLad)
+
+2. **`_scans.tsv` Patching**
+   - Not implemented in existing tools
+   - Must update filenames when files are renamed/moved
+   - Must handle multi-subject/session hierarchies correctly
+
+3. **`participants.tsv` / `participants.json` Management**
+   - Subject/session rename operations require coordinated updates
+   - Must validate consistency between JSON and TSV formats
+
+4. **Metadata Aggregation/Segregation**
+   - IP-freely prototype exists but not integrated
+   - Must respect BIDS inheritance principle
+   - Must handle partial file absence (don't aggregate if metadata is missing from some subjects)
+
+5. **File System Operations with VCS Awareness**
+   - Must detect and use `git mv` instead of `os.rename`
+   - Must support git-annex content management
+   - Must support rollback/atomic operations
+
+6. **Dataset Merging/Splitting Logic**
+   - Beyond scope of bidsschematools
+   - Requires conflict resolution strategies
+   - Requires session/subject management
+
+#### **PARTIALLY AVAILABLE:**
+
+1. **Deprecation Application**
+   - PR #2282 implements 3 migrations but only covers a subset of 1.x deprecations
+   - Needs expansion to cover all deprecations mentioned in the design doc
+   - Infrastructure is sound; implementations need to be added for each deprecation type
+
+2. **Schema Version Targeting**
+   - bidsschematools can load different schema versions
+   - bids-utils design FR-010 requires explicit version selection and auto-detect from `BIDSVersion` field
+   - This glue layer must be built
+
+---
+
+### 6. KEY INTEGRATION POINTS FOR BIDS-UTILS
+
+**Critical Dependencies:**
+- `bidsschematools >= [version needed for deprecation APIs]`
+- Must query schema for:
+  - All deprecated metadata fields and their replacements
+  - All deprecated suffixes
+  - All deprecated enum values
+  - Entity definitions for validation
+
+**Design Requirements Addressed:**
+- **FR-016**: Derive all deprecation knowledge from schema, not hardcoded ✓ (via `deprecations.yml` parsing)
+- **FR-017**: Support explicit version selection + auto-detect from `BIDSVersion` ✓ (via `load_schema()` + file parsing)
+- **FR-018**: Cumulative migrations in version order ✓ (via decorated registry with version metadata)
+
+**Recommended Architecture for bids-utils:**
+1. Extend the migration registry pattern for comprehensive 1.x → 1.x deprecation handling
+2. Implement file/directory operation layer with VCS awareness as a separate module
+3. Compose file operations with migration transformations for rename operations
+4. Build metadata aggregation/segregation as a separate utility layer
+5. Leverage bidsschematools for all schema queries; never hardcode BIDS knowledge
+
+---
+
+### Sources:
+- [bidsschematools ReadTheDocs](https://bidsschematools.readthedocs.io/en/latest/)
+- [bids-standard/bids-specification PR #2282](https://github.com/bids-standard/bids-specification/pull/2282)
+- [bids-standard/bids-specification PR #1775](https://github.com/bids-standard/bids-specification/pull/1775)
+- [BIDS Specification Schema Tools](https://github.com/bids-standard/bids-specification/tree/master/tools/schemacode)
+- [BIDS Deprecation Rules](https://github.com/bids-standard/bids-specification/blob/master/src/schema/rules/checks/deprecations.yml)
+- [BIDS Metadata Definitions](https://github.com/bids-standard/bids-specification/blob/master/src/schema/objects/metadata.yaml)
+- [PyPI bidsschematools](https://pypi.org/project/bidsschematools/)</result>
+<usage><total_tokens>36970</total_tokens><tool_uses>29</tool_uses><duration_ms>138303</duration_ms></usage>
+</task-notification>
+Full transcript available at: /tmp/claude-1000/-home-yoh-proj-bids-bids-utils/09006296-669b-4161-a3c3-d9847ff0b319/tasks/a8f78f724f577e426.output
