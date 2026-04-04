@@ -35,3 +35,5 @@ Thumbs.db
 # Environment
 .env
 .env.*
+uv.lock
+.duct
