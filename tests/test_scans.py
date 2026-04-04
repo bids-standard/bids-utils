@@ -18,7 +18,10 @@ class TestScansReadWrite:
     def test_roundtrip(self, tmp_path: Path) -> None:
         scans = tmp_path / "sub-01_scans.tsv"
         rows = [
-            {"filename": "func/sub-01_task-rest_bold.nii.gz", "acq_time": "2020-01-01T12:00:00"},
+            {
+                "filename": "func/sub-01_task-rest_bold.nii.gz",
+                "acq_time": "2020-01-01T12:00:00",
+            },
             {"filename": "anat/sub-01_T1w.nii.gz", "acq_time": "2020-01-01T11:00:00"},
         ]
         write_scans_tsv(scans, rows)

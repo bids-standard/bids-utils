@@ -268,6 +268,9 @@ bids-utils manipulates existing datasets. It does NOT:
 - Feature branches off `main`.
 - PRs require at least one review before merge.
 - CI must pass (tests, linting, type checking) before merge.
+- **`tox` must pass before committing.** Never auto-commit if `tox` (or any
+  of its constituent envs: tests, lint, type, duplication) fails. Fix the
+  failures first, verify `tox` is green, then commit.
 - Spec-driven development via spec-kit: specify, plan, then implement.
 
 ### Tooling

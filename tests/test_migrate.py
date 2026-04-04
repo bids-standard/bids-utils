@@ -76,12 +76,14 @@ class TestPathFormat:
         fmap = ds_path / "sub-01" / "fmap"
         fmap.mkdir(parents=True)
         sidecar = fmap / "sub-01_phasediff.json"
-        sidecar.write_text(json.dumps({
-            "IntendedFor": "ses-01/func/sub-01_ses-01_task-rest_bold.nii.gz"
-        }))
+        sidecar.write_text(
+            json.dumps(
+                {"IntendedFor": "ses-01/func/sub-01_ses-01_task-rest_bold.nii.gz"}
+            )
+        )
 
         ds = BIDSDataset.from_path(ds_path)
-        result = migrate_dataset(ds)
+        migrate_dataset(ds)
 
         data = json.loads(sidecar.read_text())
         assert data["IntendedFor"].startswith("bids::")
@@ -92,15 +94,19 @@ class TestPathFormat:
         fmap = ds_path / "sub-01" / "fmap"
         fmap.mkdir(parents=True)
         sidecar = fmap / "sub-01_phasediff.json"
-        sidecar.write_text(json.dumps({
-            "IntendedFor": [
-                "func/sub-01_task-rest_bold.nii.gz",
-                "func/sub-01_task-motor_bold.nii.gz",
-            ]
-        }))
+        sidecar.write_text(
+            json.dumps(
+                {
+                    "IntendedFor": [
+                        "func/sub-01_task-rest_bold.nii.gz",
+                        "func/sub-01_task-motor_bold.nii.gz",
+                    ]
+                }
+            )
+        )
 
         ds = BIDSDataset.from_path(ds_path)
-        result = migrate_dataset(ds)
+        migrate_dataset(ds)
 
         data = json.loads(sidecar.read_text())
         assert isinstance(data["IntendedFor"], list)
@@ -117,7 +123,7 @@ class TestDOIFormat:
         desc.write_text(json.dumps(data))
 
         ds = BIDSDataset.from_path(ds_path)
-        result = migrate_dataset(ds)
+        migrate_dataset(ds)
 
         data = json.loads(desc.read_text())
         assert data["DatasetDOI"] == "doi:10.1234/example"
@@ -139,7 +145,7 @@ class TestScanDateMove:
         scans.write_text("filename\tacq_time\nfunc/sub-01_task-rest_bold.nii.gz\t\n")
 
         ds = BIDSDataset.from_path(ds_path)
-        result = migrate_dataset(ds)
+        migrate_dataset(ds)
 
         # ScanDate should be removed from JSON
         data = json.loads(sidecar.read_text())
@@ -179,4 +185,6 @@ class TestNothingToDo:
         result = migrate_dataset(ds)
 
         # Dataset at 1.9.0, no deprecated fields → nothing to do
-        assert any("up to date" in w.lower() or "nothing" in w.lower() for w in result.warnings)
+        assert any(
+            "up to date" in w.lower() or "nothing" in w.lower() for w in result.warnings
+        )

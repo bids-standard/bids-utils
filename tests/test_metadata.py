@@ -83,7 +83,9 @@ class TestAggregate:
         ds_path = _make_metadata_dataset(tmp_path)
         # Make sub-02 have different values
         sub02_json = ds_path / "sub-02" / "func" / "sub-02_task-rest_bold.json"
-        sub02_json.write_text(json.dumps({"RepetitionTime": 3.0, "TaskName": "motor", "EchoTime": 0.05}))
+        sub02_json.write_text(
+            json.dumps({"RepetitionTime": 3.0, "TaskName": "motor", "EchoTime": 0.05})
+        )
 
         ds = BIDSDataset.from_path(ds_path)
         result = aggregate_metadata(ds, mode="move")
@@ -128,10 +130,7 @@ class TestAudit:
         ds = BIDSDataset.from_path(ds_path)
         result = audit_metadata(ds)
 
-        # EchoTime differs between sub-01 (0.03) and sub-02 (0.05)
-        # But RepetitionTime and TaskName are the same
-        # Only EchoTime should be flagged IF there are exactly 2 different values
-        # Actually with 2 files and 2 unique values, len(unique) == len(values), so it's "fully unique"
-        # We need 3+ subjects to see "inconsistent" (neither all same nor all different)
-        # Let's just check it runs without error
+        # With only 2 files, values are either all-same or all-different
+        # (both excluded). Need 3+ subjects to detect inconsistency.
+        # Just verify it runs without error.
         assert result.total_files > 0

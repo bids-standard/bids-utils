@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import shutil
 from pathlib import Path
 
@@ -45,7 +44,11 @@ def split_dataset(
     desc = dataset.root / "dataset_description.json"
     if desc.exists():
         result.changes.append(
-            Change(action="create", source=output_path / "dataset_description.json", detail="Copy dataset_description.json")
+            Change(
+                action="create",
+                source=output_path / "dataset_description.json",
+                detail="Copy dataset_description.json",
+            )
         )
         if not dry_run:
             shutil.copy2(desc, output_path / "dataset_description.json")
@@ -98,7 +101,11 @@ def split_dataset(
                 json_target = output_path / json_src.relative_to(dataset.root)
                 if not any(c.source == json_target for c in result.changes):
                     result.changes.append(
-                        Change(action="create", source=json_target, detail=f"Copy sidecar {json_name}")
+                        Change(
+                            action="create",
+                            source=json_target,
+                            detail=f"Copy sidecar {json_name}",
+                        )
                     )
                     if not dry_run:
                         json_target.parent.mkdir(parents=True, exist_ok=True)

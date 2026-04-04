@@ -5,10 +5,9 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from bids_utils.cli import main
-
 # Import to register the rename command
 import bids_utils.cli.rename  # noqa: F401
+from bids_utils.cli import main
 
 
 class TestCLIHelp:

@@ -7,8 +7,13 @@ from pathlib import Path
 from bids_utils._dataset import BIDSDataset
 from bids_utils._participants import remove_participant, rename_participant
 from bids_utils._scans import read_scans_tsv, write_scans_tsv
-from bids_utils._types import Change, OperationResult
-from bids_utils.rename import rename_file
+from bids_utils._types import (
+    Change,
+    OperationResult,
+    normalize_subject_id,
+    rename_change,
+    require_subject_dir,
+)
 
 
 def rename_subject(
@@ -27,18 +32,13 @@ def rename_subject(
         Subject labels WITHOUT "sub-" prefix (e.g., "01", "99").
     """
     result = OperationResult(dry_run=dry_run)
-    old_id = f"sub-{old}" if not old.startswith("sub-") else old
-    new_id = f"sub-{new}" if not new.startswith("sub-") else new
-    old_label = old_id.removeprefix("sub-")
-    new_label = new_id.removeprefix("sub-")
+    old_id = normalize_subject_id(old)
+    new_id = normalize_subject_id(new)
 
-    old_dir = dataset.root / old_id
-    new_dir = dataset.root / new_id
-
-    if not old_dir.is_dir():
-        result.success = False
-        result.errors.append(f"Subject directory not found: {old_dir}")
+    old_dir = require_subject_dir(dataset.root, old_id, result)
+    if old_dir is None:
         return result
+    new_dir = dataset.root / new_id
 
     if new_dir.exists():
         result.success = False
@@ -53,7 +53,7 @@ def rename_subject(
 
     # Record directory rename
     result.changes.append(
-        Change(action="rename", source=old_dir, target=new_dir, detail=f"Rename directory {old_id} → {new_id}")
+        rename_change(old_dir, new_dir, f"Rename directory {old_id} \u2192 {new_id}")
     )
 
     # Record file renames
@@ -63,21 +63,29 @@ def rename_subject(
         rel = f.relative_to(old_dir)
         new_path = new_dir / rel.parent / new_name
         result.changes.append(
-            Change(action="rename", source=f, target=new_path, detail=f"Rename {f.name} → {new_name}")
+            rename_change(f, new_path, f"Rename {f.name} \u2192 {new_name}")
         )
 
     # participants.tsv update
     participants = dataset.root / "participants.tsv"
     if participants.is_file():
         result.changes.append(
-            Change(action="modify", source=participants, detail=f"Update participants.tsv: {old_id} → {new_id}")
+            Change(
+                action="modify",
+                source=participants,
+                detail=f"Update participants.tsv: {old_id} → {new_id}",
+            )
         )
 
     # scans.tsv updates
     for scans_file in old_dir.rglob("*_scans.tsv"):
         new_scans_name = scans_file.name.replace(old_id, new_id)
         result.changes.append(
-            Change(action="modify", source=scans_file, detail=f"Update scans.tsv entries and rename to {new_scans_name}")
+            Change(
+                action="modify",
+                source=scans_file,
+                detail=f"Update scans.tsv entries and rename to {new_scans_name}",
+            )
         )
 
     if dry_run:
@@ -131,12 +139,10 @@ def remove_subject(
 ) -> OperationResult:
     """Remove a subject from the dataset."""
     result = OperationResult(dry_run=dry_run)
-    sub_id = f"sub-{subject}" if not subject.startswith("sub-") else subject
+    sub_id = normalize_subject_id(subject)
 
-    sub_dir = dataset.root / sub_id
-    if not sub_dir.is_dir():
-        result.success = False
-        result.errors.append(f"Subject directory not found: {sub_dir}")
+    sub_dir = require_subject_dir(dataset.root, sub_id, result)
+    if sub_dir is None:
         return result
 
     result.changes.append(
@@ -146,7 +152,11 @@ def remove_subject(
     participants = dataset.root / "participants.tsv"
     if participants.is_file():
         result.changes.append(
-            Change(action="modify", source=participants, detail=f"Remove {sub_id} from participants.tsv")
+            Change(
+                action="modify",
+                source=participants,
+                detail=f"Remove {sub_id} from participants.tsv",
+            )
         )
 
     if dry_run:

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from bids_utils._dataset import BIDSDataset
 from bids_utils._scans import read_scans_tsv, write_scans_tsv
 from bids_utils._types import Change, OperationResult
@@ -37,7 +35,8 @@ def rename_session(
         sub_dirs = [dataset.root / sub_id]
     else:
         sub_dirs = sorted(
-            d for d in dataset.root.iterdir()
+            d
+            for d in dataset.root.iterdir()
             if d.is_dir() and d.name.startswith("sub-")
         )
 
@@ -55,12 +54,16 @@ def rename_session(
             new_ses_dir = sub_dir / new_id
 
             if not old_ses_dir.is_dir():
-                result.warnings.append(f"{sub_name}: session {old_id} not found, skipping")
+                result.warnings.append(
+                    f"{sub_name}: session {old_id} not found, skipping"
+                )
                 continue
 
             if new_ses_dir.exists():
                 result.success = False
-                result.errors.append(f"{sub_name}: target session {new_id} already exists")
+                result.errors.append(
+                    f"{sub_name}: target session {new_id} already exists"
+                )
                 return result
 
             result.changes.append(
@@ -105,7 +108,9 @@ def rename_session(
             new_ses_dir = sub_dir / new_id
             if new_ses_dir.exists():
                 result.success = False
-                result.errors.append(f"{sub_name}: target session {new_id} already exists")
+                result.errors.append(
+                    f"{sub_name}: target session {new_id} already exists"
+                )
                 return result
 
             # Find datatype directories (func/, anat/, fmap/, etc.)
@@ -142,7 +147,9 @@ def rename_session(
             for f in sorted(new_ses_dir.rglob("*"), reverse=True):
                 if f.is_file() and sub_name in f.name and new_ses_label not in f.name:
                     # Insert ses-X after sub-XX
-                    new_name = f.name.replace(f"{sub_name}_", f"{sub_name}_{new_ses_label}_")
+                    new_name = f.name.replace(
+                        f"{sub_name}_", f"{sub_name}_{new_ses_label}_"
+                    )
                     new_path = f.parent / new_name
                     if f != new_path:
                         vcs.move(f, new_path)

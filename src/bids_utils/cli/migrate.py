@@ -4,18 +4,21 @@ from __future__ import annotations
 
 import json
 import sys
-from pathlib import Path
 
 import click
 
-from bids_utils._dataset import BIDSDataset
 from bids_utils.cli import main
-from bids_utils.cli._common import common_options
+from bids_utils.cli._common import common_options, load_dataset
 from bids_utils.migrate import migrate_dataset
 
 
 @main.command()
-@click.option("--to", "to_version", default=None, help="Target BIDS version (default: current released).")
+@click.option(
+    "--to",
+    "to_version",
+    default=None,
+    help="Target BIDS version (default: current released).",
+)
 @common_options
 def migrate(
     to_version: str | None,
@@ -27,11 +30,7 @@ def migrate(
     schema_version: str | None,
 ) -> None:
     """Apply schema-driven migrations to resolve deprecations."""
-    try:
-        dataset = BIDSDataset.from_path(Path.cwd())
-    except (FileNotFoundError, ValueError) as e:
-        click.echo(f"Error: {e}", err=True)
-        sys.exit(1)
+    dataset = load_dataset()
 
     if schema_version:
         dataset.schema_version = schema_version
@@ -39,7 +38,7 @@ def migrate(
     result = migrate_dataset(dataset, to_version=to_version, dry_run=dry_run)
 
     if json_output:
-        output = {
+        output: dict[str, object] = {
             "success": result.success,
             "dry_run": result.dry_run,
             "from_version": result.from_version,
@@ -58,9 +57,9 @@ def migrate(
                 {"action": c.action, "source": str(c.source), "detail": c.detail}
                 for c in result.changes
             ],
-            "warnings": result.warnings,
-            "errors": result.errors,
         }
+        output["warnings"] = result.warnings
+        output["errors"] = result.errors
         click.echo(json.dumps(output, indent=2))
     else:
         prefix = "[DRY RUN] " if dry_run else ""
@@ -68,7 +67,7 @@ def migrate(
             click.echo(f"{prefix}Found {len(result.findings)} migration(s):")
             for f in result.findings:
                 click.echo(f"  {f.file.name}: {f.rule.description}")
-                click.echo(f"    {f.current_value} ��� {f.proposed_value}")
+                click.echo(f"    {f.current_value} \u2192 {f.proposed_value}")
         for change in result.changes:
             click.echo(f"{prefix}{change.detail}")
         for warning in result.warnings:

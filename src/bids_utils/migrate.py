@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Any
 
 from bids_utils._dataset import BIDSDataset
 from bids_utils._scans import find_scans_tsv, read_scans_tsv, write_scans_tsv
-from bids_utils._types import Change, OperationResult
+from bids_utils._types import Change
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -27,7 +28,7 @@ class MigrationRule:
 
     id: str
     from_version: str
-    category: str  # field_rename, value_rename, suffix_rename, path_format, cross_file_move, enum_rename
+    category: str  # field_rename, value_rename, suffix_rename, etc.
     description: str
     old_field: str | None = None
     new_field: str | None = None
@@ -90,10 +91,7 @@ def _get_rules(from_version: str, to_version: str) -> list[MigrationRule]:
             rule_v = Version(rule.from_version)
         except Exception:
             continue
-        if from_v < rule_v <= to_v:
-            applicable.append(rule)
-        # Also include rules at from_version for deprecations already present
-        elif rule_v <= from_v <= to_v:
+        if from_v < rule_v <= to_v or rule_v <= from_v <= to_v:
             applicable.append(rule)
 
     return applicable
@@ -531,7 +529,7 @@ def migrate_dataset(
     json_files = _scan_json_files(dataset.root)
 
     # Scan for findings per rule category
-    _SCANNERS: dict[str, Callable[..., list[MigrationFinding]]] = {
+    scanners: dict[str, Callable[..., list[MigrationFinding]]] = {
         "field_rename": lambda r: _scan_for_field_rename(json_files, r),
         "enum_rename": lambda r: _scan_for_enum_rename(json_files, r),
         "path_format": lambda r: _scan_for_path_format(json_files, r),
@@ -540,7 +538,7 @@ def migrate_dataset(
     }
 
     for rule in rules:
-        scanner = _SCANNERS.get(rule.category)
+        scanner = scanners.get(rule.category)
         if scanner:
             findings = scanner(rule)
             result.findings.extend(findings)
@@ -553,7 +551,7 @@ def migrate_dataset(
         return result
 
     # Apply fixes
-    _APPLIERS: dict[str, Callable[..., Change | None]] = {
+    appliers: dict[str, Callable[..., Change | None]] = {
         "field_rename": lambda f: _apply_field_rename(f),
         "enum_rename": lambda f: _apply_enum_rename(f),
         "path_format": lambda f: _apply_path_format(f),
@@ -563,12 +561,10 @@ def migrate_dataset(
 
     for finding in result.findings:
         if not finding.can_auto_fix:
-            result.warnings.append(
-                f"Cannot auto-fix: {finding.file}: {finding.reason}"
-            )
+            result.warnings.append(f"Cannot auto-fix: {finding.file}: {finding.reason}")
             continue
 
-        applier = _APPLIERS.get(finding.rule.category)
+        applier = appliers.get(finding.rule.category)
         if applier:
             change = applier(finding)
             if change:

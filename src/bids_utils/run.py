@@ -7,8 +7,13 @@ from pathlib import Path
 
 from bids_utils._dataset import BIDSDataset
 from bids_utils._scans import find_scans_tsv, remove_scans_entry, update_scans_entry
-from bids_utils._sidecars import find_sidecars
-from bids_utils._types import Change, OperationResult
+from bids_utils._types import (
+    Change,
+    OperationResult,
+    normalize_subject_id,
+    rename_change,
+    require_subject_dir,
+)
 
 
 def remove_run(
@@ -32,14 +37,12 @@ def remove_run(
     """
     result = OperationResult(dry_run=dry_run)
 
-    sub_id = f"sub-{subject}" if not subject.startswith("sub-") else subject
+    sub_id = normalize_subject_id(subject)
     run_id = f"run-{run}" if not run.startswith("run-") else run
     run_num = int(run_id.removeprefix("run-"))
 
-    sub_dir = dataset.root / sub_id
-    if not sub_dir.is_dir():
-        result.success = False
-        result.errors.append(f"Subject directory not found: {sub_dir}")
+    sub_dir = require_subject_dir(dataset.root, sub_id, result)
+    if sub_dir is None:
         return result
 
     # Find all files matching this run
@@ -76,12 +79,7 @@ def remove_run(
                 new_path = f.parent / new_name
                 shifts.append((f, new_path))
                 result.changes.append(
-                    Change(
-                        action="rename",
-                        source=f,
-                        target=new_path,
-                        detail=f"Shift {f.name} → {new_name}",
-                    )
+                    rename_change(f, new_path, f"Shift {f.name} \u2192 {new_name}")
                 )
 
     if dry_run:

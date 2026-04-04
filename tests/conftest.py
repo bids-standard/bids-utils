@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -48,7 +46,9 @@ def tmp_bids_dataset(tmp_path: Path) -> Path:
     )
 
     # participants.tsv
-    (ds / "participants.tsv").write_text("participant_id\tage\tsex\nsub-01\t25\tM\nsub-02\t30\tF\n")
+    (ds / "participants.tsv").write_text(
+        "participant_id\tage\tsex\nsub-01\t25\tM\nsub-02\t30\tF\n"
+    )
 
     # sub-01 and sub-02
     _create_subject(ds, "01", sessions=None)
@@ -73,7 +73,9 @@ def tmp_bids_dataset_with_sessions(tmp_path: Path) -> Path:
         )
     )
 
-    (ds / "participants.tsv").write_text("participant_id\tage\nsub-01\t25\nsub-02\t30\n")
+    (ds / "participants.tsv").write_text(
+        "participant_id\tage\nsub-01\t25\nsub-02\t30\n"
+    )
 
     _create_subject(ds, "01", sessions=["pre", "post"])
     _create_subject(ds, "02", sessions=["pre", "post"])

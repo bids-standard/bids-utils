@@ -29,7 +29,9 @@ def _make_run_dataset(tmp_path: Path) -> Path:
                 f.write_text(json.dumps({"TaskName": "rest"}))
             else:
                 f.write_bytes(b"")
-        scans_entries.append(f"func/sub-01_task-rest_run-{run}_bold.nii.gz\t2020-01-01T12:00:00")
+        scans_entries.append(
+            f"func/sub-01_task-rest_run-{run}_bold.nii.gz\t2020-01-01T12:00:00"
+        )
 
     scans = ds / "sub-01" / "sub-01_scans.tsv"
     scans.write_text("filename\tacq_time\n" + "\n".join(scans_entries) + "\n")

@@ -19,6 +19,11 @@ class Entity:
         return f"{self.key}-{self.value}"
 
 
+def rename_change(source: Path, target: Path, detail: str) -> Change:
+    """Create a rename :class:`Change`."""
+    return Change(action="rename", source=source, target=target, detail=detail)
+
+
 @dataclass
 class BIDSPath:
     """A parsed BIDS file path decomposed into entities, suffix, and extension.
@@ -171,3 +176,44 @@ class OperationResult:
     changes: list[Change] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize to a JSON-friendly dict."""
+        return {
+            "success": self.success,
+            "dry_run": self.dry_run,
+            "changes": [
+                {
+                    "action": c.action,
+                    "source": str(c.source),
+                    "target": str(c.target) if c.target else None,
+                    "detail": c.detail,
+                }
+                for c in self.changes
+            ],
+            "warnings": self.warnings,
+            "errors": self.errors,
+        }
+
+
+def normalize_subject_id(label: str) -> str:
+    """Ensure a subject label has the ``sub-`` prefix."""
+    return label if label.startswith("sub-") else f"sub-{label}"
+
+
+def require_subject_dir(
+    dataset_root: Path,
+    sub_id: str,
+    result: OperationResult,
+) -> Path | None:
+    """Validate that a subject directory exists under *dataset_root*.
+
+    On success, return the directory ``Path``.  On failure, mark *result*
+    as failed and return ``None``.
+    """
+    sub_dir = dataset_root / sub_id
+    if not sub_dir.is_dir():
+        result.success = False
+        result.errors.append(f"Subject directory not found: {sub_dir}")
+        return None
+    return sub_dir

@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 import json
-import sys
-from pathlib import Path
 
 import click
 
-from bids_utils._dataset import BIDSDataset
 from bids_utils.cli import main
-from bids_utils.cli._common import common_options
+from bids_utils.cli._common import common_options, load_dataset
 from bids_utils.metadata import aggregate_metadata, audit_metadata, segregate_metadata
 
 
@@ -21,7 +18,12 @@ def metadata() -> None:
 
 @metadata.command()
 @click.argument("scope", required=False, default=None)
-@click.option("--mode", type=click.Choice(["copy", "move"]), default="move", help="Copy or move metadata up.")
+@click.option(
+    "--mode",
+    type=click.Choice(["copy", "move"]),
+    default="move",
+    help="Copy or move metadata up.",
+)
 @common_options
 def aggregate(
     scope: str | None,
@@ -34,11 +36,7 @@ def aggregate(
     schema_version: str | None,
 ) -> None:
     """Hoist common metadata up the inheritance hierarchy."""
-    try:
-        dataset = BIDSDataset.from_path(Path.cwd())
-    except (FileNotFoundError, ValueError) as e:
-        click.echo(f"Error: {e}", err=True)
-        sys.exit(1)
+    dataset = load_dataset()
 
     result = aggregate_metadata(dataset, scope=scope, mode=mode, dry_run=dry_run)  # type: ignore[arg-type]
 
@@ -60,11 +58,7 @@ def segregate(
     schema_version: str | None,
 ) -> None:
     """Push all metadata down to leaf-level sidecars."""
-    try:
-        dataset = BIDSDataset.from_path(Path.cwd())
-    except (FileNotFoundError, ValueError) as e:
-        click.echo(f"Error: {e}", err=True)
-        sys.exit(1)
+    dataset = load_dataset()
 
     result = segregate_metadata(dataset, scope=scope, dry_run=dry_run)
 
@@ -84,16 +78,20 @@ def audit(
     schema_version: str | None,
 ) -> None:
     """Report metadata inconsistencies."""
-    try:
-        dataset = BIDSDataset.from_path(Path.cwd())
-    except (FileNotFoundError, ValueError) as e:
-        click.echo(f"Error: {e}", err=True)
-        sys.exit(1)
+    dataset = load_dataset()
 
     result = audit_metadata(dataset)
 
     if json_output:
-        click.echo(json.dumps({"inconsistent_keys": result.inconsistent_keys, "total_files": result.total_files}, indent=2))
+        click.echo(
+            json.dumps(
+                {
+                    "inconsistent_keys": result.inconsistent_keys,
+                    "total_files": result.total_files,
+                },
+                indent=2,
+            )
+        )
     else:
         if not result.inconsistent_keys:
             click.echo("No inconsistencies found.")

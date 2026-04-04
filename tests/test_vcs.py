@@ -60,12 +60,29 @@ class TestGit:
     @pytest.mark.ai_generated
     def test_move(self, tmp_path: Path) -> None:
         subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmp_path, capture_output=True, check=True)
-        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True, check=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=tmp_path,
+            capture_output=True,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"],
+            cwd=tmp_path,
+            capture_output=True,
+            check=True,
+        )
         src = tmp_path / "a.txt"
         src.write_text("hello")
-        subprocess.run(["git", "add", "a.txt"], cwd=tmp_path, capture_output=True, check=True)
-        subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True, check=True)
+        subprocess.run(
+            ["git", "add", "a.txt"], cwd=tmp_path, capture_output=True, check=True
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "init"],
+            cwd=tmp_path,
+            capture_output=True,
+            check=True,
+        )
 
         dst = tmp_path / "b.txt"
         git = Git(tmp_path)
@@ -76,11 +93,28 @@ class TestGit:
     @pytest.mark.ai_generated
     def test_is_dirty(self, tmp_path: Path) -> None:
         subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmp_path, capture_output=True, check=True)
-        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True, check=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=tmp_path,
+            capture_output=True,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"],
+            cwd=tmp_path,
+            capture_output=True,
+            check=True,
+        )
         (tmp_path / "a.txt").write_text("x")
-        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True)
-        subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True, check=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=tmp_path, capture_output=True, check=True
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "init"],
+            cwd=tmp_path,
+            capture_output=True,
+            check=True,
+        )
 
         git = Git(tmp_path)
         assert git.is_dirty() is False

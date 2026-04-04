@@ -22,7 +22,9 @@ def _make_simple_dataset(tmp_path: Path, name: str, subjects: list[str]) -> Path
         func = ds / f"sub-{sub}" / "func"
         func.mkdir(parents=True)
         (func / f"sub-{sub}_task-rest_bold.nii.gz").write_bytes(b"")
-        (func / f"sub-{sub}_task-rest_bold.json").write_text(json.dumps({"TaskName": "rest"}))
+        (func / f"sub-{sub}_task-rest_bold.json").write_text(
+            json.dumps({"TaskName": "rest"})
+        )
 
     return ds
 
@@ -58,9 +60,7 @@ class TestMerge:
         ds_b = _make_simple_dataset(tmp_path, "dsB", ["01"])
         output = tmp_path / "merged"
 
-        result = merge_datasets(
-            [ds_a, ds_b], output, into_sessions=["ses-A", "ses-B"]
-        )
+        result = merge_datasets([ds_a, ds_b], output, into_sessions=["ses-A", "ses-B"])
 
         assert result.success
         assert (output / "sub-01" / "ses-A").is_dir()

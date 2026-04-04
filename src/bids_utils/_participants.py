@@ -2,28 +2,19 @@
 
 from __future__ import annotations
 
-import csv
-from io import StringIO
 from pathlib import Path
+
+from bids_utils._tsv import read_tsv, write_tsv
 
 
 def read_participants_tsv(path: Path) -> list[dict[str, str]]:
     """Read participants.tsv into a list of row dicts."""
-    text = path.read_text(encoding="utf-8")
-    reader = csv.DictReader(StringIO(text), delimiter="\t")
-    return list(reader)
+    return read_tsv(path)
 
 
 def write_participants_tsv(path: Path, rows: list[dict[str, str]]) -> None:
     """Write rows to participants.tsv."""
-    if not rows:
-        return
-    fieldnames = list(rows[0].keys())
-    buf = StringIO()
-    writer = csv.DictWriter(buf, fieldnames=fieldnames, delimiter="\t", lineterminator="\n")
-    writer.writeheader()
-    writer.writerows(rows)
-    path.write_text(buf.getvalue(), encoding="utf-8")
+    write_tsv(path, rows)
 
 
 def rename_participant(

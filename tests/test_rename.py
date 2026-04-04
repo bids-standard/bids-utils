@@ -20,7 +20,9 @@ class TestRenameFile:
         assert result.success
         assert not result.dry_run
         assert not bold.exists()
-        new_bold = tmp_bids_dataset / "sub-01" / "func" / "sub-01_task-nback_bold.nii.gz"
+        new_bold = (
+            tmp_bids_dataset / "sub-01" / "func" / "sub-01_task-nback_bold.nii.gz"
+        )
         assert new_bold.exists()
 
     @pytest.mark.ai_generated

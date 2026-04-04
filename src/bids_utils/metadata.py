@@ -5,6 +5,7 @@ Uses BIDS inheritance hierarchy to manage metadata distribution.
 
 from __future__ import annotations
 
+import contextlib
 import json
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -131,7 +132,10 @@ def aggregate_metadata(
             Change(
                 action="create" if not target.exists() else "modify",
                 source=target,
-                detail=f"Aggregate {len(common)} key(s) to {target.relative_to(dataset.root)}: {list(common.keys())}",
+                detail=(
+                    f"Aggregate {len(common)} key(s) to "
+                    f"{target.relative_to(dataset.root)}: {list(common.keys())}"
+                ),
             )
         )
 
@@ -141,10 +145,8 @@ def aggregate_metadata(
         # Write/update the parent-level sidecar
         existing: dict[str, Any] = {}
         if target.exists():
-            try:
+            with contextlib.suppress(json.JSONDecodeError, OSError):
                 existing = json.loads(target.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
-                pass
         existing.update(common)
         target.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
 
@@ -318,14 +320,14 @@ def audit_metadata(dataset: BIDSDataset) -> AuditResult:
                 continue
 
             # Skip if all same (fully equivalent) or all different (fully unique)
-            unique_values = set(json.dumps(v, sort_keys=True) for v in values)
+            unique_values = {json.dumps(v, sort_keys=True) for v in values}
             if len(unique_values) == 1 or len(unique_values) == len(values):
                 continue
 
             # This key has inconsistent values
             result.inconsistent_keys[f"{suffix}/{key}"] = [
                 {"file": str(f), "value": data.get(key)}
-                for f, data in zip(files, all_data)
+                for f, data in zip(files, all_data, strict=False)
                 if key in data
             ]
 

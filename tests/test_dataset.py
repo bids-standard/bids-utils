@@ -40,9 +40,7 @@ class TestBIDSDataset:
 
     @pytest.mark.ai_generated
     def test_from_path_missing_version(self, tmp_path: Path) -> None:
-        (tmp_path / "dataset_description.json").write_text(
-            json.dumps({"Name": "test"})
-        )
+        (tmp_path / "dataset_description.json").write_text(json.dumps({"Name": "test"}))
         with pytest.raises(ValueError, match="Missing BIDSVersion"):
             BIDSDataset.from_path(tmp_path)
 
