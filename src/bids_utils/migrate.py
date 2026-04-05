@@ -80,10 +80,13 @@ def _register_rule(rule: MigrationRule) -> None:
 
 def _get_rules(from_version: str, to_version: str) -> list[MigrationRule]:
     """Get applicable rules between two versions."""
-    from packaging.version import Version
+    from packaging.version import InvalidVersion, Version
 
-    from_v = Version(from_version)
-    to_v = Version(to_version)
+    try:
+        from_v = Version(from_version)
+        to_v = Version(to_version)
+    except InvalidVersion:
+        return []
 
     applicable = []
     for rule in _RULES:

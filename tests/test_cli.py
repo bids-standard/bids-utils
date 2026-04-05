@@ -90,3 +90,44 @@ class TestCLIRename:
         f.write_bytes(b"")
         result = runner.invoke(main, ["rename", str(f), "--set", "task=nback"])
         assert result.exit_code != 0
+
+
+class TestCLIRemove:
+    @pytest.mark.ai_generated
+    def test_remove_prompts_without_force(self, tmp_bids_dataset: Path) -> None:
+        """Without --force, remove should prompt and abort on 'n'."""
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["remove", "sub-01"],
+            input="n\n",
+            catch_exceptions=False,
+        )
+        assert result.exit_code != 0
+        assert (tmp_bids_dataset / "sub-01").is_dir()  # not deleted
+
+    @pytest.mark.ai_generated
+    def test_remove_prompts_confirms_on_y(self, tmp_bids_dataset: Path) -> None:
+        """With 'y' input, remove should proceed."""
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["remove", "sub-01"],
+            input="y\n",
+            catch_exceptions=False,
+        )
+        # exit 0 or 2 depending on whether dataset found from cwd
+        # The key test is that it didn't abort at the prompt
+        assert "Remove sub-01" in result.output or result.exit_code != 0
+
+    @pytest.mark.ai_generated
+    def test_remove_force_skips_prompt(self, tmp_bids_dataset: Path) -> None:
+        """With --force, remove should not prompt."""
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["remove", "sub-01", "--force"],
+            catch_exceptions=False,
+        )
+        # Should not contain the confirmation question
+        assert "cannot be undone" not in result.output

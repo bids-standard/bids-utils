@@ -47,6 +47,12 @@ def remove_cmd(
     schema_version: str | None,
 ) -> None:
     """Remove a subject from the dataset."""
+    if not force and not dry_run:
+        click.confirm(
+            f"Remove {subject} and all its data? This cannot be undone",
+            abort=True,
+        )
+
     dataset = load_dataset()
 
     result = remove_subject(dataset, subject, dry_run=dry_run, force=force)

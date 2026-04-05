@@ -237,7 +237,7 @@ tests/
 
 ### Phase 6: Metadata Operations (Story 6 — P2)
 
-**Goal**: `bids-utils metadata {aggregate,segregate,deduplicate,audit}` working.
+**Goal**: `bids-utils metadata {aggregate,segregate,audit}` working.
 
 **Prior art**: IP-freely (@Lestropie) implements a graph-based relational model with bidirectional m4d/d4m mappings and ruleset-based inheritance behaviors. Key learnings: three inheritance behaviors (merge for `.json`, nearest for `.bval`/`.bvec`, forbidden for `.tsv`), parameterized rulesets, applicability rules (ancestor directory + entity subset matching + suffix matching). bids-utils should adopt the m4d/d4m pattern and add schema integration.
 
@@ -250,10 +250,9 @@ tests/
    - Support scoped operation (per-subject, per-session)
    - Support `--mode copy|move`
 2. **Segregate**: Push metadata down to leaf level (inverse of aggregate)
-3. **Deduplicate**: Remove redundant metadata at either leaf or root level
-4. **Audit**: Report metadata values that are neither fully unique nor fully equivalent
-5. CLI wrappers
-6. Tests:
+3. **Audit**: Report metadata values that are neither fully unique nor fully equivalent
+4. CLI wrappers
+5. Tests:
    - Verify resolved metadata is unchanged after aggregate + segregate round-trip
    - bids-examples sweep
 

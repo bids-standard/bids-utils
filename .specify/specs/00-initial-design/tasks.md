@@ -72,7 +72,7 @@
 - [X] T027 [US1] Implement `src/bids_utils/cli/rename.py`: click command wiring `--set`, `--dry-run`, `--json`, `-v`/`-q`
 - [X] T028 [US1] Implement `src/bids_utils/cli/_common.py`: shared CLI decorators/options (`--dry-run`, `--json`, `-v`/`-q`, `--force`, `--include-sourcedata`, `--schema-version`)
 - [X] T029 [US1] Write CLI smoke tests in `tests/test_cli.py` — `bids-utils rename --help`, `bids-utils rename --dry-run` on a fixture dataset
-- [X] T030 [US1] Write `bids-examples` sweep test in `tests/integration/test_bids_examples.py` — rename a random file in each dataset, validate
+- [ ] T030 [US1] Write `bids-examples` sweep test in `tests/integration/test_bids_examples.py` — rename a random file in each dataset, validate
 
 **Checkpoint**: `bids-utils rename` is functional. Single-file rename with sidecars, scans, VCS all working.
 
@@ -89,8 +89,8 @@
 - [X] T031 [US2] Implement migration rule engine in `src/bids_utils/migrate.py`: `MigrationRule`, `MigrationPlan`, `MigrationFinding` dataclasses per data-model.md; migration registry (decorator-based, adapted from PR #2282 pattern); load deprecation rules from schema (`rules/checks/deprecations.yml`, `objects/metadata.yaml`, `objects/enums.yaml`)
 - [X] T032 [US2] Implement metadata field rename handler: `BasedOn` → `Sources`, `RawSources` → `Sources`, `ScanDate` → `acq_time` in `_scans.tsv`, `DCOffsetCorrection` → `SoftwareFilters`, `AcquisitionDuration` → `FrameAcquisitionDuration`
 - [X] T033 [US2] Implement value format change handler: relative paths → BIDS URIs in `IntendedFor`, `AssociatedEmptyRoom`, `Sources`; `DatasetDOI` bare DOIs → URI format
-- [X] T034 [US2] Implement suffix deprecation handler: `_phase` → `_part-phase_bold`; deprecated anat suffixes `T2star`, `FLASH`, `PD` (delegates to `rename_file()`)
-- [X] T035 [US2] Implement enum value rename handler: `ElektaNeuromag` → `NeuromagElektaMEGIN`, deprecated template identifiers (`fsaverage3`–`fsaverage6`, `fsaveragesym`, versioned `UNCInfant*`)
+- [ ] T034 [US2] Implement suffix deprecation handler: `_phase` → `_part-phase_bold`; deprecated anat suffixes `T2star`, `FLASH`, `PD` (delegates to `rename_file()`)
+- [ ] T035 [US2] Implement enum value rename handler: `ElektaNeuromag` → `NeuromagElektaMEGIN`, deprecated template identifiers (`fsaverage3`–`fsaverage6`, `fsaveragesym`, versioned `UNCInfant*`)
 - [X] T036 [US2] Implement cross-file move handler: `ScanDate` from JSON sidecar → `acq_time` column in `_scans.tsv` (create `_scans.tsv` if needed)
 - [X] T037 [US2] Implement `migrate_dataset()` orchestrator: determine dataset version, determine target version (default: current released 1.x), compute applicable rules between versions, scan dataset for findings, apply auto-fixable findings, report unfixable ones
 - [X] T038 [US2] Write tests for `migrate.py` in `tests/test_migrate.py`:
@@ -104,7 +104,7 @@
   - Ambiguous cases skipped with clear reporting
   - `--to 1.9.0` applies only up-to-1.9.0 deprecations
 - [X] T039 [US2] Implement `src/bids_utils/cli/migrate.py`: click command with `--to VERSION`, `--dry-run`, `--json`
-- [X] T040 [US2] Write `bids-examples` integration test: find datasets with older `BIDSVersion`, migrate, validate
+- [ ] T040 [US2] Write `bids-examples` integration test: find datasets with older `BIDSVersion`, migrate, validate
 
 **Checkpoint**: `bids-utils migrate` handles all 1.x deprecations schema-driven.
 
@@ -118,15 +118,15 @@
 
 ### Implementation for User Story 3
 
-- [X] T041 [US3] Extend migration rule engine for 2.0-specific transformations: entity renames, structural reorganization, metadata key changes (from 2.0 schema)
-- [X] T042 [US3] Ensure cumulative migration: `migrate --to 2.0` on a 1.4 dataset applies all 1.x deprecation fixes first, then 2.0 changes
-- [X] T043 [US3] Handle ambiguities requiring human judgment: abort with clear explanation, list items requiring manual intervention
-- [X] T044 [US3] Write tests for 2.0 migration in `tests/test_migrate.py`:
+- [ ] T041 [US3] Extend migration rule engine for 2.0-specific transformations: entity renames, structural reorganization, metadata key changes (from 2.0 schema)
+- [ ] T042 [US3] Ensure cumulative migration: `migrate --to 2.0` on a 1.4 dataset applies all 1.x deprecation fixes first, then 2.0 changes
+- [ ] T043 [US3] Handle ambiguities requiring human judgment: abort with clear explanation, list items requiring manual intervention
+- [ ] T044 [US3] Write tests for 2.0 migration in `tests/test_migrate.py`:
   - 2.0-specific transformations applied
   - Cumulative application (1.x → 2.0)
   - Already-at-target → "nothing to do"
   - Ambiguities flagged, not guessed
-- [X] T045 [US3] Write `bids-examples` integration test: migrate 1.x datasets to 2.0, validate against 2.0 schema
+- [ ] T045 [US3] Write `bids-examples` integration test: migrate 1.x datasets to 2.0, validate against 2.0 schema
 
 **Checkpoint**: Full migration path from any 1.x version to 2.0.
 
@@ -150,7 +150,7 @@
   - Target subject already exists → refuse with exit code 2
   - VCS used when present (single commit)
 - [X] T049 [US4] Implement `src/bids_utils/cli/subject.py`: `bids-utils subject-rename` click command
-- [X] T050 [US4] Write `bids-examples` sweep test for subject rename
+- [ ] T050 [US4] Write `bids-examples` sweep test for subject rename
 
 **Checkpoint**: Subject rename fully functional.
 
@@ -170,7 +170,7 @@
   - Move-into-session (`'' → ses-01`) introduces session level for all subjects
   - Target session already exists → refuse with exit code 2
 - [X] T053 [US5] Implement `src/bids_utils/cli/session.py`: `bids-utils session-rename` click command
-- [X] T054 [US5] Write `bids-examples` sweep test for session rename
+- [ ] T054 [US5] Write `bids-examples` sweep test for session rename
 
 **Checkpoint**: Session rename including move-into-session fully functional.
 
@@ -197,7 +197,7 @@
   - Audit reports inconsistent values
   - Round-trip: aggregate then segregate preserves equivalence
 - [X] T060 [US6] Implement `src/bids_utils/cli/metadata.py`: `bids-utils metadata {aggregate,segregate,audit}` click subcommands
-- [X] T061 [US6] Write `bids-examples` sweep test for metadata operations
+- [ ] T061 [US6] Write `bids-examples` sweep test for metadata operations
 
 **Checkpoint**: Metadata manipulation fully functional.
 
@@ -215,7 +215,7 @@
 - [X] T065 [P] [US8] Write tests for `remove_run()` in `tests/test_run.py`: run removed, `--shift` reindexes, `--no-shift` leaves gap, `_scans.tsv` updated
 - [X] T066 [US7] Add `bids-utils remove` to `src/bids_utils/cli/subject.py`
 - [X] T067 [P] [US8] Implement `src/bids_utils/cli/run.py`: `bids-utils remove-run` click command
-- [X] T068 Write `bids-examples` integration tests for remove operations
+- [ ] T068 Write `bids-examples` integration tests for remove operations
 
 **Checkpoint**: Remove subject/session/run functional.
 
@@ -236,7 +236,7 @@
   - `participants.tsv` conflicts reported
   - Metadata conflicts handled with segregate/re-aggregate
 - [X] T071 [US9] Implement `src/bids_utils/cli/merge.py`: `bids-utils merge` click command
-- [X] T072 [US9] Write `bids-examples` integration test: merge two datasets, validate
+- [ ] T072 [US9] Write `bids-examples` integration test: merge two datasets, validate
 
 **Checkpoint**: Dataset merge functional.
 
@@ -260,11 +260,11 @@
 
 **Purpose**: Improvements that affect multiple user stories.
 
-- [X] T076 [P] Documentation: populate `mkdocs` site with quickstart, API reference, CLI reference
-- [X] T077 [P] Add `--json` output mode tests for all commands (SC-005)
-- [X] T078 [P] Run full `bids-examples` sweep across all operations (SC-001)
-- [X] T079 [P] Test suite against multiple BIDS schema versions (1.8, 1.9, 2.0-dev) (SC-006)
-- [X] T080 [P] Performance profiling on a 1000-subject synthetic dataset (SC-003)
+- [ ] T076 [P] Documentation: populate `mkdocs` site with quickstart, API reference, CLI reference
+- [ ] T077 [P] Add `--json` output mode tests for all commands (SC-005)
+- [ ] T078 [P] Run full `bids-examples` sweep across all operations (SC-001)
+- [ ] T079 [P] Test suite against multiple BIDS schema versions (1.8, 1.9, 2.0-dev) (SC-006)
+- [ ] T080 [P] Performance profiling on a 1000-subject synthetic dataset (SC-003)
 - [X] T081 Code cleanup: check for duplication (`tox -e duplication`), refactor
 - [X] T082 Run `quickstart.md` validation — verify all documented commands work
 
