@@ -209,6 +209,15 @@ A dataset needs to be split — for example, extracting only behavioral data or 
 - How does `migrate` handle deprecated metadata fields that appear in inherited (higher-level) JSON sidecars vs. leaf-level ones?
 - What happens when migrating `ScanDate` to `_scans.tsv` but no `_scans.tsv` exists yet for that subject/session?
 
+## Clarifications
+
+### Session 2026-04-06
+
+- Q: Should `bids-utils completion` auto-detect shell from `$SHELL` or require explicit argument? → A: Auto-detect from `$SHELL`, with optional explicit override argument.
+- Q: How should BIDS-aware completions resolve the dataset root? → A: Honor `--dataset` if provided; otherwise walk up from CWD until `dataset_description.json` is found.
+- Q: Should `bids-utils completion` offer `--install` to modify shell rc files? → A: No; print activation script to stdout only (user handles installation).
+- Q: Which argument types get custom completions initially? → A: Filesystem-derived items (`sub-*`, `ses-*` directories, BIDS file paths) plus entity keys from the schema (`task=`, `run=`, `acq=`, etc.). Entity value discovery deferred.
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
@@ -231,6 +240,9 @@ A dataset needs to be split — for example, extracting only behavioral data or 
 - **FR-016**: `migrate` MUST derive all deprecation knowledge from the `bidsschematools` machine-readable schema (deprecation rules, metadata definitions, enum definitions) — not from hardcoded migration tables.
 - **FR-017**: `migrate` MUST default to the current released BIDS version when no `--to` target is specified, and MUST support explicit `--to` for both 1.x and 2.0 targets.
 - **FR-018**: `migrate` MUST apply migrations cumulatively — migrating from 1.4 to 1.9 applies all intermediate deprecation fixes in version order.
+- **FR-019**: System MUST provide a `bids-utils completion [SHELL]` subcommand that outputs shell completion activation scripts. When `SHELL` argument is omitted, auto-detect from the `$SHELL` environment variable. Supported shells: Bash, Zsh, Fish (matching Click 8.0+ built-in completion support). Output goes to stdout only (no `--install` flag).
+- **FR-020**: CLI MUST resolve the BIDS dataset root by: (1) using the `--dataset`/`-d` flag if provided, or (2) walking up the directory hierarchy from CWD until `dataset_description.json` is found. This resolution is used both by commands and by shell completion.
+- **FR-021**: Shell completion MUST provide BIDS-aware completions: filesystem-derived items (`sub-*` directories, `ses-*` directories, BIDS file paths) and entity keys from the `bidsschematools` schema (e.g., `task=`, `run=`, `acq=`). Entity value completion (e.g., `task=rest`) is deferred to a later release.
 
 ### Key Entities
 
