@@ -132,6 +132,8 @@
 
 **Note**: Exact 2.0 transformations depend on BIDS 2.0 schema stabilization. This phase may iterate.
 
+**⚠ PROVISIONAL**: Tasks T041-T045 are marked complete but their implementations are necessarily preliminary — they target the current 2.0-dev schema which is not yet finalized. These tasks will likely need re-implementation when the BIDS 2.0 schema stabilizes. Track upstream progress and re-validate.
+
 ---
 
 ## Phase 5: User Story 4 — Rename a Subject (Priority: P2)
@@ -256,7 +258,23 @@
 
 ---
 
-## Phase 11: Polish & Cross-Cutting Concerns
+## Phase 11: Shell Completion (FR-019, FR-020, FR-021)
+
+**Purpose**: `bids-utils completion` subcommand with BIDS-aware completions.
+
+**Independent Test**: Run `bids-utils completion bash | source /dev/stdin`, verify tab-completion offers `sub-*`, `ses-*` directories and entity keys.
+
+### Implementation
+
+- [ ] T083 [P] Implement `src/bids_utils/cli/completion.py`: `bids-utils completion [SHELL]` click command — auto-detect shell from `$SHELL`, output activation script to stdout. Supported: Bash, Zsh, Fish (Click 8.0+ built-in).
+- [ ] T084 Implement BIDS-aware custom completions: filesystem-derived items (`sub-*` directories, `ses-*` directories, BIDS file paths) and entity keys from schema (`task=`, `run=`, `acq=`). Uses `_dataset.py` for dataset root resolution (FR-020: honor `--dataset` or walk up from CWD to `dataset_description.json`).
+- [ ] T085 Write tests for completion in `tests/test_cli.py` or `tests/test_completion.py`: `bids-utils completion --help`, shell detection, activation script output for each shell, BIDS-aware completion produces expected items
+
+**Checkpoint**: `bids-utils completion` outputs working activation scripts with BIDS-aware completions.
+
+---
+
+## Phase 12: Polish & Cross-Cutting Concerns
 
 **Purpose**: Improvements that affect multiple user stories.
 
@@ -285,7 +303,8 @@
 - **Phase 8 (Remove / US7-8)**: Depends on Phase 2
 - **Phase 9 (Merge / US9)**: Depends on Phases 5, 6 (uses subject/session rename)
 - **Phase 10 (Split / US10)**: Depends on Phase 1
-- **Phase 11 (Polish)**: Depends on all desired phases being complete
+- **Phase 11 (Completion / FR-019-021)**: Depends on Phase 1 (uses `_dataset.py`, `_schema.py`)
+- **Phase 12 (Polish)**: Depends on all desired phases being complete
 
 ### Parallel Opportunities After Phase 1
 
@@ -298,6 +317,7 @@ Phase 2 (Rename)  ─→  Phase 3 (Migrate 1.x)  ─→  Phase 4 (Migrate 2.0)
                   ─→  Phase 8 (Remove)
 Phase 7 (Metadata) can start immediately after Phase 1
 Phase 10 (Split) can start immediately after Phase 1
+Phase 11 (Completion) can start immediately after Phase 1
 ```
 
 ### Within Each Phase

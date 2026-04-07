@@ -114,6 +114,38 @@ def audit_metadata(
     """Report metadata inconsistencies."""
 ```
 
+### `bids_utils.run`
+
+```python
+def remove_run(
+    dataset: BIDSDataset,
+    subject: str,
+    run: str,
+    *,
+    suffix: str | None = None,
+    task: str | None = None,
+    session: str | None = None,
+    shift: bool = True,
+    dry_run: bool = False,
+    force: bool = False,
+) -> OperationResult:
+    """Remove a run and optionally reindex subsequent runs."""
+```
+
+### `bids_utils.split`
+
+```python
+def split_dataset(
+    dataset: BIDSDataset,
+    target: str | Path,
+    *,
+    suffixes: list[str] | None = None,
+    datatypes: list[str] | None = None,
+    dry_run: bool = False,
+) -> OperationResult:
+    """Extract a subset of a dataset by suffix/datatype filter."""
+```
+
 ### `bids_utils.merge`
 
 ```python

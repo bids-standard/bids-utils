@@ -192,22 +192,36 @@ A dataset needs to be split — for example, extracting only behavioral data or 
 **Acceptance Scenarios**:
 
 1. **Given** a valid dataset, **When** `bids-utils split --suffix bold --output bold-only/` is run, **Then** only BOLD-related files (and required metadata) are extracted and the result is a valid BIDS dataset.
+2. **Given** a valid dataset, **When** `bids-utils split --datatype anat --output anat-only/` is run, **Then** only anatomical files are extracted, `dataset_description.json` is copied, `participants.tsv` is subset to included subjects, and the result is valid.
+3. **Given** a valid dataset, **When** `bids-utils split --suffix bold --dry-run` is run, **Then** the tool lists files that would be extracted without creating any output.
+4. **Given** a dataset with inherited metadata (higher-level `.json` sidecars), **When** `bids-utils split --suffix bold --output bold-only/` is run, **Then** inherited metadata that applies to extracted files is preserved in the output (either copied or segregated to leaf level) so the resolved metadata is unchanged.
 
 ---
 
 ### Edge Cases
 
 - What happens when a rename creates a filename that exceeds OS path length limits?
+  → **Resolution**: Refuse with exit code 2 and a clear error. Covered by FR-011 (refuse invalid state). No extra task needed — implement as a guard in `rename_file()`.
 - How does the tool handle symlinked files (common with git-annex)?
+  → **Resolution**: `_vcs.py` GitAnnex backend handles this. Locked annexed files are symlinks; `git annex` commands operate on them correctly. Covered by T017-T018.
 - What happens when `_scans.tsv` references files that don't exist on disk (dangling references)?
+  → **Resolution**: Warn but do not fail. Dangling references are a pre-existing dataset issue, not caused by bids-utils. Log at `-v` verbosity.
 - How does the tool handle partial datasets (e.g., missing `dataset_description.json`)?
+  → **Resolution**: `BIDSDataset.from_path()` raises an error if no `dataset_description.json` is found. Covered by T013-T014.
 - What happens when a file is locked by git-annex and content is needed for metadata operations?
+  → **Resolution**: For metadata read operations, content is needed. If locked and content unavailable, skip that file with a warning. Covered by T017-T018 (VCS tests should include locked-file scenario).
 - How does aggregation handle `.nwb` files that embed metadata internally?
+  → **Resolution**: Out of scope. bids-utils operates on BIDS sidecar metadata (`.json` files), not on embedded metadata within data files. NWB internal metadata is outside BIDS's inheritance model.
 - What happens when operating on a dataset on a read-only filesystem?
+  → **Resolution**: Operations will fail with a standard OS permission error. No special handling needed — `--dry-run` is always available for read-only inspection.
 - How does the tool handle datasets with both `participants.tsv` and `participants.json`?
+  → **Resolution**: `_participants.py` updates `participants.tsv` only. `participants.json` is a sidecar describing column semantics and does not need updating when rows change. Covered by T023-T024.
 - How does `migrate` handle a field like `IntendedFor` that uses relative paths but the referenced files don't exist (broken references)?
+  → **Resolution**: Convert the path format to BIDS URI regardless — the migration fixes the format, not the referential integrity. Log a warning about the broken reference. Covered by acceptance scenario US2.8 (ambiguous cases skipped with clear reporting).
 - How does `migrate` handle deprecated metadata fields that appear in inherited (higher-level) JSON sidecars vs. leaf-level ones?
+  → **Resolution**: Migrate the field wherever it appears. The inheritance chain is not changed — if `BasedOn` appears in a root-level sidecar, it is renamed to `Sources` there. Covered by T031-T038.
 - What happens when migrating `ScanDate` to `_scans.tsv` but no `_scans.tsv` exists yet for that subject/session?
+  → **Resolution**: Create the `_scans.tsv` with the appropriate header and populate the `acq_time` column. Explicitly covered by T036.
 
 ## Clarifications
 
@@ -237,7 +251,7 @@ A dataset needs to be split — for example, extracting only behavioral data or 
 - **FR-013**: System MUST support `-v` / `-q` verbosity controls.
 - **FR-014**: System MUST support `--include-sourcedata` flag for operations that can extend to `sourcedata/` and `.heudiconv/`.
 - **FR-015**: Sidecar discovery MUST handle all BIDS-recognized sidecar extensions (`.json`, `.bvec`, `.bval`, `.tsv` for events, etc.) based on the schema.
-- **FR-016**: `migrate` MUST derive all deprecation knowledge from the `bidsschematools` machine-readable schema (deprecation rules, metadata definitions, enum definitions) — not from hardcoded migration tables.
+- **FR-016**: `migrate` MUST derive all deprecation knowledge from the `bidsschematools` machine-readable schema (deprecation rules, metadata definitions, enum definitions) — not from hardcoded migration tables. *(Specific application of FR-009 to the migration subsystem.)*
 - **FR-017**: `migrate` MUST default to the current released BIDS version when no `--to` target is specified, and MUST support explicit `--to` for both 1.x and 2.0 targets.
 - **FR-018**: `migrate` MUST apply migrations cumulatively — migrating from 1.4 to 1.9 applies all intermediate deprecation fixes in version order.
 - **FR-019**: System MUST provide a `bids-utils completion [SHELL]` subcommand that outputs shell completion activation scripts. When `SHELL` argument is omitted, auto-detect from the `$SHELL` environment variable. Supported shells: Bash, Zsh, Fish (matching Click 8.0+ built-in completion support). Output goes to stdout only (no `--install` flag).
@@ -259,7 +273,7 @@ A dataset needs to be split — for example, extracting only behavioral data or 
 
 - **SC-001**: Every bids-examples dataset that is valid before a `rename`/`subject-rename`/`session-rename` operation is still valid after the operation completes.
 - **SC-002**: `--dry-run` output for every command matches the actual changes when run without `--dry-run` (verified by comparing dry-run output to actual filesystem diff).
-- **SC-003**: All commands complete on a 1000-subject dataset within reasonable time (no pathological performance cliffs — O(n) in number of affected files, not O(n²) in total dataset size).
+- **SC-003**: All commands complete on a 1000-subject dataset in O(n) time relative to affected files (not O(n²) in total dataset size). Single-entity operations (rename, remove-run) must not scan the entire dataset. Benchmark target: `rename` on a single file in a 1000-subject dataset completes in under 5 seconds.
 - **SC-004**: Library API is independently usable: all acceptance scenarios can be executed via Python imports without the CLI.
 - **SC-005**: 100% of mutating commands have both `--dry-run` and `--json` modes tested in CI.
 - **SC-006**: Test suite passes against at least 3 different BIDS schema versions (e.g., 1.8, 1.9, 2.0-dev).

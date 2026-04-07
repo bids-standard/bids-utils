@@ -64,6 +64,7 @@ src/bids_utils/
 ├── _types.py            # Shared type definitions (PathLike, Entity, etc.)
 ├── _vcs.py              # VCS detection and operations (git mv, git annex, datalad)
 ├── _schema.py           # Schema loading and querying helpers (wraps bidsschematools)
+├── _tsv.py              # Shared TSV read/write utilities (used by _scans.py, _participants.py)
 ├── _scans.py            # _scans.tsv read/write/update operations
 ├── _participants.py     # participants.tsv read/write/update operations
 ├── _sidecars.py         # Sidecar discovery (find all associated files for a BIDS file)
@@ -100,6 +101,8 @@ tests/
 ├── test_run.py          # Run removal tests
 ├── test_vcs.py          # VCS integration tests
 ├── test_cli.py          # CLI smoke tests
+├── test_cli_common.py   # Tests for shared CLI options/decorators
+├── test_tsv.py          # Tests for shared TSV utilities
 └── integration/
     └── test_bids_examples.py  # Sweep tests against bids-examples
 ```

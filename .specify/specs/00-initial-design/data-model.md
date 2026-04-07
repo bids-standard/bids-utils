@@ -196,4 +196,14 @@ class MigrationFinding:
     proposed_value: Any
     can_auto_fix: bool             # False if human judgment needed
     reason: str | None             # Why it can't be auto-fixed (if applicable)
+
+@dataclass
+class MigrationResult:
+    """Result of migrate_dataset(), extends MigrationPlan with outcome."""
+    plan: MigrationPlan
+    success: bool
+    dry_run: bool
+    applied: list[MigrationFinding]   # Findings that were auto-fixed
+    skipped: list[MigrationFinding]   # Findings requiring human judgment
+    errors: list[str]
 ```
