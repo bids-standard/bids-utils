@@ -78,8 +78,21 @@ def _register_rule(rule: MigrationRule) -> None:
     _RULES.append(rule)
 
 
-def _get_rules(from_version: str, to_version: str) -> list[MigrationRule]:
-    """Get applicable rules between two versions."""
+def _get_rules(
+    from_version: str, to_version: str, *, major_only: bool = False
+) -> list[MigrationRule]:
+    """Get applicable rules between two versions.
+
+    Parameters
+    ----------
+    from_version
+        Current dataset version.
+    to_version
+        Target version.
+    major_only
+        If True, only return rules for the target major version
+        (e.g., only 2.0 rules, not 1.x rules).
+    """
     from packaging.version import InvalidVersion, Version
 
     try:
@@ -94,10 +107,35 @@ def _get_rules(from_version: str, to_version: str) -> list[MigrationRule]:
             rule_v = Version(rule.from_version)
         except Exception:
             continue
-        if from_v < rule_v <= to_v or rule_v <= from_v <= to_v:
-            applicable.append(rule)
+
+        if major_only:
+            # Only include rules whose major version matches the target
+            if rule_v.major != to_v.major:
+                continue
+            if rule_v <= to_v:
+                applicable.append(rule)
+        else:
+            if from_v < rule_v <= to_v or rule_v <= from_v <= to_v:
+                applicable.append(rule)
 
     return applicable
+
+
+def _is_major_version_upgrade(from_version: str, to_version: str) -> bool:
+    """Check if migration crosses a major version boundary."""
+    from packaging.version import InvalidVersion, Version
+
+    try:
+        from_v = Version(from_version)
+        to_v = Version(to_version)
+    except InvalidVersion:
+        return False
+    return to_v.major > from_v.major
+
+
+def _latest_1x_version() -> str:
+    """Return the latest known 1.x BIDS version."""
+    return "1.11.1"
 
 
 # ---------------------------------------------------------------------------
@@ -268,6 +306,23 @@ _register_rule(
         old_field="ScanDate",
     )
 )
+
+
+# ---------------------------------------------------------------------------
+# BIDS 2.0 migration rules (placeholder infrastructure)
+#
+# The BIDS 2.0 schema is not yet finalized.  The rules below register the
+# *categories* of change that 2.0 will require so that the engine, scanner,
+# applier, and test infrastructure are exercised end-to-end.  Concrete rules
+# will be added once the 2.0 schema stabilizes.
+# ---------------------------------------------------------------------------
+
+# NOTE: No concrete 2.0 rules are registered yet because the schema is not
+# finalized.  When rules are added they should use from_version="2.0.0" and
+# one of the 2.0-specific categories below:
+#   - "entity_rename"         (entity key changes, e.g. hypothetical acq→acquisition)
+#   - "structural_reorg"      (directory layout changes)
+#   - "metadata_key_change"   (metadata key renames specific to 2.0)
 
 
 # ---------------------------------------------------------------------------
@@ -532,6 +587,119 @@ def _scan_for_deprecated_template(
 
 
 # ---------------------------------------------------------------------------
+# 2.0-specific scanners
+# ---------------------------------------------------------------------------
+
+
+def _scan_for_entity_rename(
+    dataset_root: Path,
+    rule: MigrationRule,
+) -> list[MigrationFinding]:
+    """Scan for files using a deprecated entity key (2.0 migration)."""
+    findings: list[MigrationFinding] = []
+    old_key = rule.old_field
+    new_key = rule.new_field
+    if not old_key:
+        return findings
+
+    bids_files = _scan_bids_files(dataset_root)
+    for fp in bids_files:
+        try:
+            bp = BIDSPath.from_path(fp)
+        except Exception:
+            continue
+        if old_key in bp.entities:
+            findings.append(
+                MigrationFinding(
+                    rule=rule,
+                    file=fp,
+                    current_value=f"{old_key}-{bp.entities[old_key]}",
+                    proposed_value=f"{new_key}-{bp.entities[old_key]}",
+                    can_auto_fix=True,
+                )
+            )
+    return findings
+
+
+def _scan_for_metadata_key_change(
+    json_files: list[Path],
+    rule: MigrationRule,
+) -> list[MigrationFinding]:
+    """Scan for metadata keys that changed in 2.0."""
+    # Reuse the field_rename scanner — same logic, different category label
+    return _scan_for_field_rename(json_files, rule)
+
+
+def _scan_for_structural_reorg(
+    dataset_root: Path,
+    rule: MigrationRule,
+) -> list[MigrationFinding]:
+    """Scan for structural layout issues requiring 2.0 reorganization.
+
+    Structural reorganization rules are inherently ambiguous and require
+    human judgment.  This scanner flags findings but marks them as not
+    auto-fixable.
+    """
+    findings: list[MigrationFinding] = []
+    # Structural reorg rules describe directory layout changes that cannot
+    # be applied automatically without understanding dataset intent.
+    # Flag the entire dataset as needing review.
+    findings.append(
+        MigrationFinding(
+            rule=rule,
+            file=dataset_root / "dataset_description.json",
+            current_value="current layout",
+            proposed_value=rule.description,
+            can_auto_fix=False,
+            reason=(
+                "Structural reorganization requires human judgment;"
+                " review the BIDS 2.0 specification for guidance"
+            ),
+        )
+    )
+    return findings
+
+
+# ---------------------------------------------------------------------------
+# 2.0-specific appliers
+# ---------------------------------------------------------------------------
+
+
+def _apply_entity_rename(
+    finding: MigrationFinding, dataset: BIDSDataset
+) -> Change | None:
+    """Apply an entity key rename by delegating to rename_file()."""
+    from bids_utils.rename import rename_file
+
+    fp = finding.file
+    rule = finding.rule
+    old_key = rule.old_field
+    new_key = rule.new_field
+    if not old_key or not new_key:
+        return None
+
+    try:
+        bp = BIDSPath.from_path(fp)
+    except Exception:
+        return None
+
+    if old_key not in bp.entities:
+        return None
+
+    # Rename: drop old entity, add new entity with same value
+    value = bp.entities[old_key]
+    result = rename_file(
+        dataset,
+        fp,
+        set_entities={new_key: value},
+        drop_entities=[old_key],
+    )
+    if result.success and result.changes:
+        return result.changes[0]
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Apply fixes
 # ---------------------------------------------------------------------------
 
@@ -715,6 +883,10 @@ def migrate_dataset(
 ) -> MigrationResult:
     """Apply schema-driven migrations to a BIDS dataset.
 
+    When the target is a major version upgrade (e.g., 1.x → 2.0), migration
+    is **cumulative**: all 1.x deprecation fixes are applied first, then
+    2.0-specific transformations.
+
     Parameters
     ----------
     dataset
@@ -741,8 +913,16 @@ def migrate_dataset(
         to_version=to_version,
     )
 
-    # Get applicable rules
-    rules = _get_rules(from_version, to_version)
+    is_major_upgrade = _is_major_version_upgrade(from_version, to_version)
+
+    if is_major_upgrade:
+        # Cumulative migration: apply all 1.x fixes first, then 2.0 rules
+        latest_1x = _latest_1x_version()
+        onex_rules = _get_rules(from_version, latest_1x)
+        twox_rules = _get_rules(from_version, to_version, major_only=True)
+        rules = onex_rules + twox_rules
+    else:
+        rules = _get_rules(from_version, to_version)
 
     if not rules:
         result.warnings.append("No applicable migration rules found")
@@ -760,6 +940,10 @@ def migrate_dataset(
         "value_rename": lambda r: _scan_for_doi_format(json_files, r),
         "suffix_deprecation": lambda r: _scan_for_suffix_deprecation(dataset.root, r),
         "deprecated_template": lambda r: _scan_for_deprecated_template(json_files, r),
+        # 2.0-specific categories
+        "entity_rename": lambda r: _scan_for_entity_rename(dataset.root, r),
+        "metadata_key_change": lambda r: _scan_for_metadata_key_change(json_files, r),
+        "structural_reorg": lambda r: _scan_for_structural_reorg(dataset.root, r),
     }
 
     for rule in rules:
@@ -770,6 +954,23 @@ def migrate_dataset(
 
     if not result.findings:
         result.warnings.append("Nothing to migrate — dataset is up to date")
+        return result
+
+    # T043: Check for ambiguities that should abort migration
+    unfixable = [f for f in result.findings if not f.can_auto_fix]
+    if is_major_upgrade and unfixable and not dry_run:
+        # For major version upgrades, unfixable findings abort the migration
+        # rather than partially applying (user must resolve ambiguities first)
+        result.success = False
+        for f in unfixable:
+            result.errors.append(
+                f"Cannot auto-fix ({f.rule.id}): {f.file}: {f.reason}"
+            )
+        result.warnings.append(
+            "Migration aborted: resolve the above ambiguities manually "
+            "before migrating to a new major version. "
+            "Run with --dry-run to see all findings."
+        )
         return result
 
     if dry_run:
@@ -783,7 +984,10 @@ def migrate_dataset(
         "cross_file_move": lambda f: _apply_scandate_move(f, dataset.root),
         "value_rename": lambda f: _apply_doi_format(f),
         "suffix_deprecation": lambda f: _apply_suffix_deprecation(f, dataset),
-        # deprecated_template: no applier — can_auto_fix=False
+        # 2.0-specific appliers
+        "entity_rename": lambda f: _apply_entity_rename(f, dataset),
+        "metadata_key_change": lambda f: _apply_field_rename(f),
+        # deprecated_template, structural_reorg: no applier — can_auto_fix=False
     }
 
     for finding in result.findings:

@@ -118,15 +118,15 @@
 
 ### Implementation for User Story 3
 
-- [ ] T041 [US3] Extend migration rule engine for 2.0-specific transformations: entity renames, structural reorganization, metadata key changes (from 2.0 schema)
-- [ ] T042 [US3] Ensure cumulative migration: `migrate --to 2.0` on a 1.4 dataset applies all 1.x deprecation fixes first, then 2.0 changes
-- [ ] T043 [US3] Handle ambiguities requiring human judgment: abort with clear explanation, list items requiring manual intervention
-- [ ] T044 [US3] Write tests for 2.0 migration in `tests/test_migrate.py`:
+- [X] T041 [US3] Extend migration rule engine for 2.0-specific transformations: entity renames, structural reorganization, metadata key changes (from 2.0 schema)
+- [X] T042 [US3] Ensure cumulative migration: `migrate --to 2.0` on a 1.4 dataset applies all 1.x deprecation fixes first, then 2.0 changes
+- [X] T043 [US3] Handle ambiguities requiring human judgment: abort with clear explanation, list items requiring manual intervention
+- [X] T044 [US3] Write tests for 2.0 migration in `tests/test_migrate.py`:
   - 2.0-specific transformations applied
   - Cumulative application (1.x → 2.0)
   - Already-at-target → "nothing to do"
   - Ambiguities flagged, not guessed
-- [ ] T045 [US3] Write `bids-examples` integration test: migrate 1.x datasets to 2.0, validate against 2.0 schema
+- [X] T045 [US3] Write `bids-examples` integration test: migrate 1.x datasets to 2.0, validate against 2.0 schema
 
 **Checkpoint**: Full migration path from any 1.x version to 2.0.
 

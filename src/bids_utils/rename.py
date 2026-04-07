@@ -19,6 +19,7 @@ def rename_file(
     path: str | Path,
     *,
     set_entities: dict[str, str] | None = None,
+    drop_entities: list[str] | None = None,
     new_suffix: str | None = None,
     dry_run: bool = False,
     include_sourcedata: bool = False,
@@ -33,6 +34,8 @@ def rename_file(
         Path to the primary file (absolute or relative to dataset root).
     set_entities
         Entity key-value overrides (e.g., ``{"task": "nback"}``).
+    drop_entities
+        Entity keys to remove from the filename.
     new_suffix
         Optional new suffix (e.g., ``"T1w"``).
     dry_run
@@ -62,6 +65,16 @@ def rename_file(
     # Apply overrides
     if set_entities:
         bids_path = bids_path.with_entities(**set_entities)
+    if drop_entities:
+        remaining = {
+            k: v for k, v in bids_path.entities.items() if k not in drop_entities
+        }
+        bids_path = BIDSPath(
+            entities=remaining,
+            suffix=bids_path.suffix,
+            extension=bids_path.extension,
+            datatype=bids_path.datatype,
+        )
     if new_suffix:
         bids_path = bids_path.with_suffix(new_suffix)
 

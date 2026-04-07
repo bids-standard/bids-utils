@@ -6,7 +6,12 @@ from pathlib import Path
 import pytest
 
 from bids_utils._dataset import BIDSDataset
-from bids_utils.migrate import migrate_dataset
+from bids_utils.migrate import (
+    _RULES,
+    MigrationRule,
+    _register_rule,
+    migrate_dataset,
+)
 
 
 def _make_dataset(tmp_path: Path, bids_version: str = "1.4.0") -> Path:
@@ -394,4 +399,158 @@ class TestNothingToDo:
         # Dataset at 1.9.0, no deprecated fields → nothing to do
         assert any(
             "up to date" in w.lower() or "nothing" in w.lower() for w in result.warnings
+        )
+
+
+# ---------------------------------------------------------------------------
+# Phase 4: BIDS 2.0 Migration Tests (T044)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def _register_synthetic_2x_rules():
+    """Register synthetic 2.0 rules for testing and clean up afterward."""
+    rules_to_add = [
+        MigrationRule(
+            id="entity_rename_acq_to_acquisition",
+            from_version="2.0.0",
+            category="entity_rename",
+            description="Rename entity 'acq' to 'acquisition'",
+            old_field="acq",
+            new_field="acquisition",
+        ),
+        MigrationRule(
+            id="metadata_key_change_EchoTime1",
+            from_version="2.0.0",
+            category="metadata_key_change",
+            description="Rename metadata field 'EchoTime1' to 'EchoTimePrimary'",
+            old_field="EchoTime1",
+            new_field="EchoTimePrimary",
+        ),
+        MigrationRule(
+            id="structural_reorg_derivatives_layout",
+            from_version="2.0.0",
+            category="structural_reorg",
+            description="Derivatives directory layout changed in 2.0",
+        ),
+    ]
+    for rule in rules_to_add:
+        _register_rule(rule)
+
+    yield
+
+    # Clean up: remove the synthetic rules
+    for rule in rules_to_add:
+        _RULES.remove(rule)
+
+
+class TestMigrate20:
+    """BIDS 2.0 migration infrastructure tests using synthetic rules."""
+
+    @pytest.mark.ai_generated
+    @pytest.mark.usefixtures("_register_synthetic_2x_rules")
+    def test_cumulative_migration_applies_1x_first(self, tmp_path: Path) -> None:
+        """Migrating from 1.4 to 2.0 applies all 1.x deprecation fixes too."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        fmap = ds_path / "sub-01" / "fmap"
+        fmap.mkdir(parents=True)
+        sidecar = fmap / "sub-01_phasediff.json"
+        sidecar.write_text(
+            json.dumps({"IntendedFor": "func/sub-01_bold.nii.gz"})
+        )
+
+        ds = BIDSDataset.from_path(ds_path)
+        # dry_run to inspect findings without triggering the abort
+        result = migrate_dataset(ds, to_version="2.0.0", dry_run=True)
+
+        # Should include 1.x path_format findings AND 2.0 structural_reorg
+        categories = {f.rule.category for f in result.findings}
+        assert "path_format" in categories, "1.x rules should be included"
+        assert "structural_reorg" in categories, "2.0 rules should be included"
+
+    @pytest.mark.ai_generated
+    @pytest.mark.usefixtures("_register_synthetic_2x_rules")
+    def test_entity_rename_detected(self, tmp_path: Path) -> None:
+        """2.0 entity rename rule detects files with the old entity key."""
+        ds_path = _make_dataset(tmp_path, "1.9.0")
+        func = ds_path / "sub-01" / "func"
+        func.mkdir(parents=True)
+        # File with acq entity
+        nii = func / "sub-01_task-rest_acq-lowres_bold.nii.gz"
+        nii.write_bytes(b"")
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds, to_version="2.0.0", dry_run=True)
+
+        entity_findings = [
+            f for f in result.findings if f.rule.category == "entity_rename"
+        ]
+        assert entity_findings
+        assert entity_findings[0].can_auto_fix
+        assert "acq-lowres" in entity_findings[0].current_value
+        assert "acquisition-lowres" in entity_findings[0].proposed_value
+
+    @pytest.mark.ai_generated
+    @pytest.mark.usefixtures("_register_synthetic_2x_rules")
+    def test_metadata_key_change_detected(self, tmp_path: Path) -> None:
+        """2.0 metadata key change rule detects deprecated field names."""
+        ds_path = _make_dataset(tmp_path, "1.9.0")
+        fmap = ds_path / "sub-01" / "fmap"
+        fmap.mkdir(parents=True)
+        sidecar = fmap / "sub-01_phasediff.json"
+        sidecar.write_text(json.dumps({"EchoTime1": 0.00492}))
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds, to_version="2.0.0", dry_run=True)
+
+        key_findings = [
+            f for f in result.findings if f.rule.category == "metadata_key_change"
+        ]
+        assert key_findings
+        assert "EchoTime1" in str(key_findings[0].current_value)
+        assert "EchoTimePrimary" in str(key_findings[0].proposed_value)
+
+    @pytest.mark.ai_generated
+    @pytest.mark.usefixtures("_register_synthetic_2x_rules")
+    def test_structural_reorg_flagged_not_auto_fixable(self, tmp_path: Path) -> None:
+        """Structural reorg findings are flagged but not auto-fixable."""
+        ds_path = _make_dataset(tmp_path, "1.9.0")
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds, to_version="2.0.0", dry_run=True)
+
+        reorg_findings = [
+            f for f in result.findings if f.rule.category == "structural_reorg"
+        ]
+        assert reorg_findings
+        assert not reorg_findings[0].can_auto_fix
+        assert "human judgment" in reorg_findings[0].reason
+
+    @pytest.mark.ai_generated
+    @pytest.mark.usefixtures("_register_synthetic_2x_rules")
+    def test_ambiguities_abort_major_migration(self, tmp_path: Path) -> None:
+        """Major version migration aborts when unfixable findings exist."""
+        ds_path = _make_dataset(tmp_path, "1.9.0")
+
+        ds = BIDSDataset.from_path(ds_path)
+        # Non-dry-run should abort due to structural_reorg being unfixable
+        result = migrate_dataset(ds, to_version="2.0.0")
+
+        assert not result.success
+        assert result.errors
+        assert any("Cannot auto-fix" in e for e in result.errors)
+        assert any("aborted" in w.lower() for w in result.warnings)
+
+    @pytest.mark.ai_generated
+    @pytest.mark.usefixtures("_register_synthetic_2x_rules")
+    def test_already_at_target_nothing_to_do(self, tmp_path: Path) -> None:
+        """Dataset already at 2.0 → nothing to do."""
+        ds_path = _make_dataset(tmp_path, "2.0.0")
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds, to_version="2.0.0")
+
+        assert any(
+            "nothing" in w.lower() or "no applicable" in w.lower()
+            for w in result.warnings
         )

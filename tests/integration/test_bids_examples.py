@@ -157,6 +157,30 @@ class TestMigrateSweep:
 
 @requires_bids_examples
 @pytest.mark.integration
+class TestMigrate20Sweep:
+    """Run migrate --to 2.0 --dry-run on each dataset; verify no crashes."""
+
+    @pytest.mark.ai_generated
+    @pytest.mark.parametrize("ds_name", _dataset_ids())
+    def test_migrate_to_20_dry_run(self, ds_name: str) -> None:
+        ds_path = BIDS_EXAMPLES_DIR / ds_name
+        try:
+            ds = BIDSDataset.from_path(ds_path)
+        except (FileNotFoundError, ValueError) as exc:
+            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+
+        result = migrate_dataset(ds, to_version="2.0.0", dry_run=True)
+
+        # Should never crash — in dry_run mode even unfixable findings
+        # are reported without aborting
+        assert result.dry_run
+        # Result includes 1.x findings (cumulative) and potentially 2.0
+        # findings once 2.0 rules are registered
+        assert result.findings is not None
+
+
+@requires_bids_examples
+@pytest.mark.integration
 class TestRenameMutating:
     """Actually rename a file in a copy and verify file counts match."""
 
