@@ -1,0 +1,21 @@
+/speckit.clarify there should be easy ways to enable shell completion for bids-utils commands. https://click.palletsprojects.com/en/stable/shell-completion/ since click is used could be the relevant documentation
+
+---
+
+2+1 but also see if SHELL env var available -- should tell which shell is running.  and also 3 - yes, we should complete what we know.   Also you could not find /speckit.clarify but there is ./.claude/skills/speckit-clarify -- did you see it?
+
+---
+
+A
+
+---
+
+honor --dataset, but if not given -- deduce by going up the folders hierarchy until seeing dataset_description.json which should be an indicator of BIDS dataset root
+
+---
+
+A
+
+---
+
+B
