@@ -1,0 +1,29 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "0816729e7f79",
+  "strategy": "manual-commit",
+  "branch": "00-initial-design",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".specify/specs/00-initial-design/tasks.md",
+    "src/bids_utils/migrate.py",
+    "src/bids_utils/rename.py",
+    "tests/integration/test_bids_examples.py",
+    "tests/test_migrate.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/08/16729e7f79/0/metadata.json",
+      "transcript": "/08/16729e7f79/0/full.jsonl",
+      "content_hash": "/08/16729e7f79/0/content_hash.txt",
+      "prompt": "/08/16729e7f79/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 57,
+    "cache_creation_tokens": 109174,
+    "cache_read_tokens": 4265324,
+    "output_tokens": 19134,
+    "api_call_count": 53
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "0816729e7f79",
+  "session_id": "8f259d63-07df-463f-b066-9242891b53e8",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-07T02:24:49.468615865Z",
+  "branch": "00-initial-design",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".specify/specs/00-initial-design/tasks.md",
+    "src/bids_utils/migrate.py",
+    "src/bids_utils/rename.py",
+    "tests/integration/test_bids_examples.py",
+    "tests/test_migrate.py"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "6472ce39d8a0",
+  "token_usage": {
+    "input_tokens": 57,
+    "cache_creation_tokens": 109174,
+    "cache_read_tokens": 4265324,
+    "output_tokens": 19134,
+    "api_call_count": 53
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-07T02:24:49.078616824Z",
+    "agent_lines": 413,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 413,
+    "agent_percentage": 100
+  }
+}
