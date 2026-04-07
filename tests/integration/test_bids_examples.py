@@ -40,6 +40,36 @@ def _copy_dataset(src: Path, tmp_path: Path) -> Path:
     return dst
 
 
+def _find_renameable_file(ds_path: Path) -> Path | None:
+    """Find a BIDS data file suitable for rename testing.
+
+    Looks for files with a sub- entity and a recognised BIDS suffix,
+    not just .nii.gz — so EEG, MEG, motion, fNIRS, microscopy etc.
+    datasets are also covered.
+    """
+    # Broad set of data-file extensions found in bids-examples
+    for pattern in [
+        "sub-*_*.nii.gz",
+        "sub-*_*.nii",
+        "sub-*_*.edf",
+        "sub-*_*.vhdr",
+        "sub-*_*.set",
+        "sub-*_*.bdf",
+        "sub-*_*.eeg",
+        "sub-*_*.fif",
+        "sub-*_*.snirf",
+        "sub-*_*.ome.tif",
+        "sub-*_*.ome.zarr",
+        "sub-*_*.tif",
+        "sub-*_*.tsv",
+        "sub-*_*.json",
+    ]:
+        hits = sorted(ds_path.rglob(pattern))
+        if hits:
+            return hits[0]
+    return None
+
+
 @requires_bids_examples
 @pytest.mark.integration
 class TestRenameSweep:
@@ -52,14 +82,12 @@ class TestRenameSweep:
         try:
             ds = BIDSDataset.from_path(ds_path)
         except (FileNotFoundError, ValueError):
-            pytest.skip(f"Cannot load {ds_name}")
+            pytest.skip(reason=f"cannot load dataset: {ds_name}")
 
-        # Find first .nii.gz file with a sub- entity
-        nii_files = sorted(ds_path.rglob("sub-*_*.nii.gz"))
-        if not nii_files:
-            pytest.skip(f"No .nii.gz files in {ds_name}")
+        target = _find_renameable_file(ds_path)
+        if target is None:
+            pytest.skip(reason=f"no renameable BIDS data file in {ds_name}")
 
-        target = nii_files[0]
         result = rename_file(
             ds,
             target,
@@ -84,14 +112,14 @@ class TestSubjectRenameSweep:
         try:
             ds = BIDSDataset.from_path(ds_path)
         except (FileNotFoundError, ValueError):
-            pytest.skip(f"Cannot load {ds_name}")
+            pytest.skip(reason=f"cannot load dataset: {ds_name}")
 
         sub_dirs = sorted(
             d for d in ds_path.iterdir()
             if d.is_dir() and d.name.startswith("sub-")
         )
         if len(sub_dirs) < 1:
-            pytest.skip(f"No subjects in {ds_name}")
+            pytest.skip(reason=f"no sub-* directories in {ds_name}")
 
         old_sub = sub_dirs[0].name
         result = rename_subject(ds, old_sub, "sub-TESTZZ", dry_run=True)
@@ -114,7 +142,7 @@ class TestMigrateSweep:
         try:
             ds = BIDSDataset.from_path(ds_path)
         except (FileNotFoundError, ValueError):
-            pytest.skip(f"Cannot load {ds_name}")
+            pytest.skip(reason=f"cannot load dataset: {ds_name}")
 
         result = migrate_dataset(ds, dry_run=True)
 
@@ -139,7 +167,7 @@ class TestRenameMutating:
                 picked = d
                 break
         if picked is None:
-            pytest.skip("No suitable dataset found")
+            pytest.skip(reason="no dataset with sub-*_*.nii.gz files found")
 
         ds_copy = _copy_dataset(picked, tmp_path)
         ds = BIDSDataset.from_path(ds_copy)
