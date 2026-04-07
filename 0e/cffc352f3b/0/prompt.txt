@@ -1,0 +1,5 @@
+/speckit.tasks
+
+---
+
+should I run /speckit.implement now or we can somehow prioritie recommended next steps? (just asking - no action needed)
