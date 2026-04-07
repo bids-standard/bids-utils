@@ -81,8 +81,8 @@ class TestRenameSweep:
         ds_path = BIDS_EXAMPLES_DIR / ds_name
         try:
             ds = BIDSDataset.from_path(ds_path)
-        except (FileNotFoundError, ValueError):
-            pytest.skip(reason=f"cannot load dataset: {ds_name}")
+        except (FileNotFoundError, ValueError) as exc:
+            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
 
         target = _find_renameable_file(ds_path)
         if target is None:
@@ -111,8 +111,8 @@ class TestSubjectRenameSweep:
         ds_path = BIDS_EXAMPLES_DIR / ds_name
         try:
             ds = BIDSDataset.from_path(ds_path)
-        except (FileNotFoundError, ValueError):
-            pytest.skip(reason=f"cannot load dataset: {ds_name}")
+        except (FileNotFoundError, ValueError) as exc:
+            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
 
         sub_dirs = sorted(
             d for d in ds_path.iterdir()
@@ -141,8 +141,8 @@ class TestMigrateSweep:
         ds_path = BIDS_EXAMPLES_DIR / ds_name
         try:
             ds = BIDSDataset.from_path(ds_path)
-        except (FileNotFoundError, ValueError):
-            pytest.skip(reason=f"cannot load dataset: {ds_name}")
+        except (FileNotFoundError, ValueError) as exc:
+            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
 
         result = migrate_dataset(ds, dry_run=True)
 
