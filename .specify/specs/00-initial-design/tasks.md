@@ -72,7 +72,7 @@
 - [X] T027 [US1] Implement `src/bids_utils/cli/rename.py`: click command wiring `--set`, `--dry-run`, `--json`, `-v`/`-q`
 - [X] T028 [US1] Implement `src/bids_utils/cli/_common.py`: shared CLI decorators/options (`--dry-run`, `--json`, `-v`/`-q`, `--force`, `--include-sourcedata`, `--schema-version`)
 - [X] T029 [US1] Write CLI smoke tests in `tests/test_cli.py` — `bids-utils rename --help`, `bids-utils rename --dry-run` on a fixture dataset
-- [ ] T030 [US1] Write `bids-examples` sweep test in `tests/integration/test_bids_examples.py` — rename a random file in each dataset, validate
+- [X] T030 [US1] Write `bids-examples` sweep test in `tests/integration/test_bids_examples.py` — rename a random file in each dataset, validate
 
 **Checkpoint**: `bids-utils rename` is functional. Single-file rename with sidecars, scans, VCS all working.
 
@@ -104,7 +104,7 @@
   - Ambiguous cases skipped with clear reporting
   - `--to 1.9.0` applies only up-to-1.9.0 deprecations
 - [X] T039 [US2] Implement `src/bids_utils/cli/migrate.py`: click command with `--to VERSION`, `--dry-run`, `--json`
-- [ ] T040 [US2] Write `bids-examples` integration test: find datasets with older `BIDSVersion`, migrate, validate
+- [X] T040 [US2] Write `bids-examples` integration test: find datasets with older `BIDSVersion`, migrate, validate
 
 **Checkpoint**: `bids-utils migrate` handles all 1.x deprecations schema-driven.
 
@@ -150,7 +150,7 @@
   - Target subject already exists → refuse with exit code 2
   - VCS used when present (single commit)
 - [X] T049 [US4] Implement `src/bids_utils/cli/subject.py`: `bids-utils subject-rename` click command
-- [ ] T050 [US4] Write `bids-examples` sweep test for subject rename
+- [X] T050 [US4] Write `bids-examples` sweep test for subject rename
 
 **Checkpoint**: Subject rename fully functional.
 
