@@ -15,7 +15,7 @@ from typing import Any
 
 from bids_utils._dataset import BIDSDataset
 from bids_utils._scans import find_scans_tsv, read_scans_tsv, write_scans_tsv
-from bids_utils._types import Change
+from bids_utils._types import BIDSPath, Change
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -138,6 +138,96 @@ for key, old_val, new_val, ver in _ENUM_RENAMES:
             old_value=old_val,
             new_value=new_val,
             metadata_key=key,
+        )
+    )
+
+# Suffix deprecations (T034)
+# _phase -> _part-phase_bold (auto-fixable, func datatype only)
+_register_rule(
+    MigrationRule(
+        id="suffix_phase_to_part_phase_bold",
+        from_version="1.6.0",
+        category="suffix_deprecation",
+        description="Replace '_phase' suffix with 'part-phase' entity"
+        " and 'bold' suffix",
+        old_value="phase",
+        new_value="bold",  # new suffix
+        affected_suffixes=["phase"],
+    )
+)
+# T2star -> ambiguous (T2starw or T2starmap) — not auto-fixable
+_register_rule(
+    MigrationRule(
+        id="suffix_T2star_ambiguous",
+        from_version="1.6.0",
+        category="suffix_deprecation",
+        description="Suffix 'T2star' is deprecated"
+        " — replace with 'T2starw' or 'T2starmap'",
+        old_value="T2star",
+        affected_suffixes=["T2star"],
+    )
+)
+# FLASH -> removed — not auto-fixable
+_register_rule(
+    MigrationRule(
+        id="suffix_FLASH_removed",
+        from_version="1.6.0",
+        category="suffix_deprecation",
+        description="Suffix 'FLASH' has been removed"
+        " — use vendor-neutral suffix instead",
+        old_value="FLASH",
+        affected_suffixes=["FLASH"],
+    )
+)
+# PD -> ambiguous (PDw or PDmap) — not auto-fixable
+_register_rule(
+    MigrationRule(
+        id="suffix_PD_ambiguous",
+        from_version="1.6.0",
+        category="suffix_deprecation",
+        description="Suffix 'PD' is deprecated — replace with 'PDw' or 'PDmap'",
+        old_value="PD",
+        affected_suffixes=["PD"],
+    )
+)
+
+# Deprecated template identifiers in coordinate system fields (T035)
+_COORDINATE_SYSTEM_KEYS = [
+    "MEGCoordinateSystem",
+    "EEGCoordinateSystem",
+    "iEEGCoordinateSystem",
+    "NIRSCoordinateSystem",
+    "FiducialsCoordinateSystem",
+    "AnatomicalLandmarkCoordinateSystem",
+    "DigitizedHeadPointsCoordinateSystem",
+    "DigitizedLandmarkCoordinateSystem",
+]
+
+_DEPRECATED_TEMPLATES = [
+    "fsaverage3",
+    "fsaverage4",
+    "fsaverage5",
+    "fsaverage6",
+    "fsaveragesym",
+    "UNCInfant0V21",
+    "UNCInfant0V22",
+    "UNCInfant0V23",
+    "UNCInfant1V21",
+    "UNCInfant1V22",
+    "UNCInfant1V23",
+    "UNCInfant2V21",
+    "UNCInfant2V22",
+    "UNCInfant2V23",
+]
+
+for tmpl in _DEPRECATED_TEMPLATES:
+    _register_rule(
+        MigrationRule(
+            id=f"deprecated_template_{tmpl}",
+            from_version="1.6.0",
+            category="deprecated_template",
+            description=f"Template identifier '{tmpl}' is deprecated",
+            old_value=tmpl,
         )
     )
 
@@ -333,6 +423,114 @@ def _scan_for_doi_format(
     return findings
 
 
+def _scan_bids_files(dataset_root: Path) -> list[Path]:
+    """Find all BIDS data files (non-JSON, non-TSV) in the dataset."""
+    results: list[Path] = []
+    for p in sorted(dataset_root.rglob("*")):
+        if not p.is_file():
+            continue
+        # Skip non-BIDS directories
+        rel = p.relative_to(dataset_root)
+        parts = rel.parts
+        if parts and parts[0] in (
+            "derivatives",
+            "sourcedata",
+            "code",
+            ".git",
+            ".datalad",
+        ):
+            continue
+        # Skip JSON sidecars, TSV files, and dataset_description
+        if p.suffix in (".json", ".tsv"):
+            continue
+        results.append(p)
+    return results
+
+
+def _scan_for_suffix_deprecation(
+    dataset_root: Path,
+    rule: MigrationRule,
+) -> list[MigrationFinding]:
+    """Scan for files with deprecated suffixes."""
+    findings: list[MigrationFinding] = []
+    deprecated_suffix = rule.old_value
+    if not deprecated_suffix:
+        return findings
+
+    bids_files = _scan_bids_files(dataset_root)
+    for fp in bids_files:
+        try:
+            bp = BIDSPath.from_path(fp)
+        except Exception:
+            continue
+        if bp.suffix != deprecated_suffix:
+            continue
+
+        if deprecated_suffix == "phase":
+            # Auto-fixable: _phase -> _part-phase_bold
+            findings.append(
+                MigrationFinding(
+                    rule=rule,
+                    file=fp,
+                    current_value=f"suffix={deprecated_suffix}",
+                    proposed_value="suffix=bold, part=phase",
+                    can_auto_fix=True,
+                )
+            )
+        else:
+            # T2star, FLASH, PD — ambiguous, cannot auto-fix
+            findings.append(
+                MigrationFinding(
+                    rule=rule,
+                    file=fp,
+                    current_value=f"suffix={deprecated_suffix}",
+                    proposed_value=rule.description,
+                    can_auto_fix=False,
+                    reason=rule.description,
+                )
+            )
+    return findings
+
+
+def _scan_for_deprecated_template(
+    json_files: list[Path],
+    rule: MigrationRule,
+) -> list[MigrationFinding]:
+    """Scan for deprecated template identifiers in coordinate system fields."""
+    findings: list[MigrationFinding] = []
+    deprecated_value = rule.old_value
+    if not deprecated_value:
+        return findings
+
+    for jf in json_files:
+        try:
+            data = json.loads(jf.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if not isinstance(data, dict):
+            continue
+
+        for key in _COORDINATE_SYSTEM_KEYS:
+            if key in data and data[key] == deprecated_value:
+                findings.append(
+                    MigrationFinding(
+                        rule=rule,
+                        file=jf,
+                        current_value=f"{key}={deprecated_value}",
+                        proposed_value=(
+                            f"Replace '{deprecated_value}'"
+                            " with a current template identifier"
+                        ),
+                        can_auto_fix=False,
+                        reason=(
+                            f"Template '{deprecated_value}' is deprecated;"
+                            " replacement requires manual selection"
+                        ),
+                    )
+                )
+    return findings
+
+
 # ---------------------------------------------------------------------------
 # Apply fixes
 # ---------------------------------------------------------------------------
@@ -482,6 +680,28 @@ def _apply_doi_format(finding: MigrationFinding) -> Change | None:
     return None
 
 
+def _apply_suffix_deprecation(
+    finding: MigrationFinding, dataset: BIDSDataset
+) -> Change | None:
+    """Apply suffix deprecation fix by delegating to rename_file()."""
+    from bids_utils.rename import rename_file
+
+    fp = finding.file
+    bp = BIDSPath.from_path(fp)
+
+    if bp.suffix == "phase":
+        # _phase -> _part-phase_bold
+        result = rename_file(
+            dataset,
+            fp,
+            set_entities={"part": "phase"},
+            new_suffix="bold",
+        )
+        if result.success and result.changes:
+            return result.changes[0]
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Main orchestrator
 # ---------------------------------------------------------------------------
@@ -538,6 +758,8 @@ def migrate_dataset(
         "path_format": lambda r: _scan_for_path_format(json_files, r),
         "cross_file_move": lambda r: _scan_for_scandate(dataset.root, json_files, r),
         "value_rename": lambda r: _scan_for_doi_format(json_files, r),
+        "suffix_deprecation": lambda r: _scan_for_suffix_deprecation(dataset.root, r),
+        "deprecated_template": lambda r: _scan_for_deprecated_template(json_files, r),
     }
 
     for rule in rules:
@@ -560,6 +782,8 @@ def migrate_dataset(
         "path_format": lambda f: _apply_path_format(f),
         "cross_file_move": lambda f: _apply_scandate_move(f, dataset.root),
         "value_rename": lambda f: _apply_doi_format(f),
+        "suffix_deprecation": lambda f: _apply_suffix_deprecation(f, dataset),
+        # deprecated_template: no applier — can_auto_fix=False
     }
 
     for finding in result.findings:

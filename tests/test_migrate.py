@@ -178,6 +178,213 @@ class TestDryRun:
         assert sidecar.read_text() == original
 
 
+class TestSuffixDeprecation:
+    @pytest.mark.ai_generated
+    def test_phase_suffix_renamed_to_part_phase_bold(self, tmp_path: Path) -> None:
+        """_phase suffix auto-fixed to part-phase entity + bold suffix."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        func = ds_path / "sub-01" / "func"
+        func.mkdir(parents=True)
+        # Create a _phase file and its sidecar
+        phase_nii = func / "sub-01_task-rest_phase.nii.gz"
+        phase_nii.write_bytes(b"")
+        phase_json = func / "sub-01_task-rest_phase.json"
+        phase_json.write_text(json.dumps({"TaskName": "rest"}))
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds)
+
+        # Should find the deprecated suffix
+        suffix_findings = [
+            f for f in result.findings if f.rule.category == "suffix_deprecation"
+        ]
+        assert suffix_findings
+        assert any(f.can_auto_fix for f in suffix_findings)
+
+        # The phase file should have been renamed
+        expected = func / "sub-01_task-rest_part-phase_bold.nii.gz"
+        assert expected.exists()
+        assert not phase_nii.exists()
+
+    @pytest.mark.ai_generated
+    def test_t2star_suffix_flagged_not_auto_fixed(self, tmp_path: Path) -> None:
+        """T2star suffix is flagged but not auto-fixed (ambiguous)."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        anat = ds_path / "sub-01" / "anat"
+        anat.mkdir(parents=True)
+        t2star = anat / "sub-01_T2star.nii.gz"
+        t2star.write_bytes(b"")
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds)
+
+        suffix_findings = [
+            f
+            for f in result.findings
+            if f.rule.category == "suffix_deprecation"
+            and "T2star" in str(f.current_value)
+        ]
+        assert suffix_findings
+        assert not suffix_findings[0].can_auto_fix
+        # File should NOT have been renamed
+        assert t2star.exists()
+
+    @pytest.mark.ai_generated
+    def test_flash_suffix_flagged_not_auto_fixed(self, tmp_path: Path) -> None:
+        """FLASH suffix is flagged but not auto-fixed (removed)."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        anat = ds_path / "sub-01" / "anat"
+        anat.mkdir(parents=True)
+        flash = anat / "sub-01_FLASH.nii.gz"
+        flash.write_bytes(b"")
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds)
+
+        suffix_findings = [
+            f
+            for f in result.findings
+            if f.rule.category == "suffix_deprecation"
+            and "FLASH" in str(f.current_value)
+        ]
+        assert suffix_findings
+        assert not suffix_findings[0].can_auto_fix
+        assert flash.exists()
+
+    @pytest.mark.ai_generated
+    def test_pd_suffix_flagged_not_auto_fixed(self, tmp_path: Path) -> None:
+        """PD suffix is flagged but not auto-fixed (ambiguous)."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        anat = ds_path / "sub-01" / "anat"
+        anat.mkdir(parents=True)
+        pd_file = anat / "sub-01_PD.nii.gz"
+        pd_file.write_bytes(b"")
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds)
+
+        suffix_findings = [
+            f
+            for f in result.findings
+            if f.rule.category == "suffix_deprecation"
+            and f.current_value == "suffix=PD"
+        ]
+        assert suffix_findings
+        assert not suffix_findings[0].can_auto_fix
+        assert pd_file.exists()
+
+    @pytest.mark.ai_generated
+    def test_phase_suffix_dry_run(self, tmp_path: Path) -> None:
+        """Dry run reports phase suffix finding without renaming."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        func = ds_path / "sub-01" / "func"
+        func.mkdir(parents=True)
+        phase_nii = func / "sub-01_task-rest_phase.nii.gz"
+        phase_nii.write_bytes(b"")
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds, dry_run=True)
+
+        suffix_findings = [
+            f for f in result.findings if f.rule.category == "suffix_deprecation"
+        ]
+        assert suffix_findings
+        # File should NOT have been renamed in dry run
+        assert phase_nii.exists()
+        assert not result.changes
+
+
+class TestDeprecatedTemplate:
+    @pytest.mark.ai_generated
+    def test_fsaverage3_flagged(self, tmp_path: Path) -> None:
+        """Deprecated template identifier fsaverage3 is flagged."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        meg = ds_path / "sub-01" / "meg"
+        meg.mkdir(parents=True)
+        sidecar = meg / "sub-01_coordsystem.json"
+        sidecar.write_text(json.dumps({"MEGCoordinateSystem": "fsaverage3"}))
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds)
+
+        tmpl_findings = [
+            f for f in result.findings if f.rule.category == "deprecated_template"
+        ]
+        assert tmpl_findings
+        assert not tmpl_findings[0].can_auto_fix
+        assert "fsaverage3" in tmpl_findings[0].current_value
+
+    @pytest.mark.ai_generated
+    def test_uncinfant_flagged(self, tmp_path: Path) -> None:
+        """Deprecated UNCInfant template is flagged."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        eeg = ds_path / "sub-01" / "eeg"
+        eeg.mkdir(parents=True)
+        sidecar = eeg / "sub-01_coordsystem.json"
+        sidecar.write_text(json.dumps({"EEGCoordinateSystem": "UNCInfant1V22"}))
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds)
+
+        tmpl_findings = [
+            f for f in result.findings if f.rule.category == "deprecated_template"
+        ]
+        assert tmpl_findings
+        assert not tmpl_findings[0].can_auto_fix
+        assert "UNCInfant1V22" in tmpl_findings[0].current_value
+
+    @pytest.mark.ai_generated
+    def test_fsaveragesym_flagged(self, tmp_path: Path) -> None:
+        """Deprecated fsaveragesym template is flagged."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        meg = ds_path / "sub-01" / "meg"
+        meg.mkdir(parents=True)
+        sidecar = meg / "sub-01_coordsystem.json"
+        sidecar.write_text(json.dumps({"MEGCoordinateSystem": "fsaveragesym"}))
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds)
+
+        tmpl_findings = [
+            f for f in result.findings if f.rule.category == "deprecated_template"
+        ]
+        assert tmpl_findings
+        assert not tmpl_findings[0].can_auto_fix
+
+    @pytest.mark.ai_generated
+    def test_non_deprecated_template_not_flagged(self, tmp_path: Path) -> None:
+        """Current template identifier 'fsaverage' is NOT flagged."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        meg = ds_path / "sub-01" / "meg"
+        meg.mkdir(parents=True)
+        sidecar = meg / "sub-01_coordsystem.json"
+        sidecar.write_text(json.dumps({"MEGCoordinateSystem": "fsaverage"}))
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds)
+
+        tmpl_findings = [
+            f for f in result.findings if f.rule.category == "deprecated_template"
+        ]
+        assert not tmpl_findings
+
+    @pytest.mark.ai_generated
+    def test_deprecated_template_not_modified(self, tmp_path: Path) -> None:
+        """Deprecated template value is not auto-modified in the file."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        meg = ds_path / "sub-01" / "meg"
+        meg.mkdir(parents=True)
+        sidecar = meg / "sub-01_coordsystem.json"
+        original = json.dumps({"MEGCoordinateSystem": "fsaverage5"})
+        sidecar.write_text(original)
+
+        ds = BIDSDataset.from_path(ds_path)
+        migrate_dataset(ds)
+
+        # File should be unchanged since can_auto_fix=False
+        assert sidecar.read_text() == original
+
+
 class TestNothingToDo:
     @pytest.mark.ai_generated
     def test_up_to_date_dataset(self, tmp_bids_dataset: Path) -> None:
