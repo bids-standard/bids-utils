@@ -170,7 +170,7 @@
   - Move-into-session (`'' → ses-01`) introduces session level for all subjects
   - Target session already exists → refuse with exit code 2
 - [X] T053 [US5] Implement `src/bids_utils/cli/session.py`: `bids-utils session-rename` click command
-- [ ] T054 [US5] Write `bids-examples` sweep test for session rename
+- [X] T054 [US5] Write `bids-examples` sweep test for session rename
 
 **Checkpoint**: Session rename including move-into-session fully functional.
 
@@ -197,7 +197,7 @@
   - Audit reports inconsistent values
   - Round-trip: aggregate then segregate preserves equivalence
 - [X] T060 [US6] Implement `src/bids_utils/cli/metadata.py`: `bids-utils metadata {aggregate,segregate,audit}` click subcommands
-- [ ] T061 [US6] Write `bids-examples` sweep test for metadata operations
+- [X] T061 [US6] Write `bids-examples` sweep test for metadata operations
 
 **Checkpoint**: Metadata manipulation fully functional.
 
@@ -215,7 +215,7 @@
 - [X] T065 [P] [US8] Write tests for `remove_run()` in `tests/test_run.py`: run removed, `--shift` reindexes, `--no-shift` leaves gap, `_scans.tsv` updated
 - [X] T066 [US7] Add `bids-utils remove` to `src/bids_utils/cli/subject.py`
 - [X] T067 [P] [US8] Implement `src/bids_utils/cli/run.py`: `bids-utils remove-run` click command
-- [ ] T068 Write `bids-examples` integration tests for remove operations
+- [X] T068 Write `bids-examples` integration tests for remove operations
 
 **Checkpoint**: Remove subject/session/run functional.
 
@@ -236,7 +236,7 @@
   - `participants.tsv` conflicts reported
   - Metadata conflicts handled with segregate/re-aggregate
 - [X] T071 [US9] Implement `src/bids_utils/cli/merge.py`: `bids-utils merge` click command
-- [ ] T072 [US9] Write `bids-examples` integration test: merge two datasets, validate
+- [X] T072 [US9] Write `bids-examples` integration test: merge two datasets, validate
 
 **Checkpoint**: Dataset merge functional.
 

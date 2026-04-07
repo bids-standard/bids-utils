@@ -12,9 +12,13 @@ from pathlib import Path
 import pytest
 
 from bids_utils._dataset import BIDSDataset
+from bids_utils.merge import merge_datasets
+from bids_utils.metadata import aggregate_metadata, audit_metadata, segregate_metadata
 from bids_utils.migrate import migrate_dataset
 from bids_utils.rename import rename_file
-from bids_utils.subject import rename_subject
+from bids_utils.run import remove_run
+from bids_utils.session import rename_session
+from bids_utils.subject import remove_subject, rename_subject
 from tests.conftest import BIDS_EXAMPLES_DIR, requires_bids_examples
 
 
@@ -185,4 +189,294 @@ class TestRenameMutating:
         after = {f.relative_to(ds_copy) for f in ds_copy.rglob("*") if f.is_file()}
         assert len(after) == len(before), (
             f"File count changed: {len(before)} -> {len(after)}"
+        )
+
+
+def _find_session_dataset_ids() -> list[str]:
+    """Return dataset names that contain at least one ses-* directory."""
+    ids = []
+    for d in _iter_datasets():
+        sub_dirs = [
+            s for s in d.iterdir() if s.is_dir() and s.name.startswith("sub-")
+        ]
+        for s in sub_dirs:
+            if any(
+                ses.is_dir() and ses.name.startswith("ses-")
+                for ses in s.iterdir()
+            ):
+                ids.append(d.name)
+                break
+    return ids
+
+
+def _find_sessionless_dataset_ids() -> list[str]:
+    """Return dataset names that have subjects but NO ses-* directories."""
+    ids = []
+    for d in _iter_datasets():
+        sub_dirs = [
+            s for s in d.iterdir() if s.is_dir() and s.name.startswith("sub-")
+        ]
+        if not sub_dirs:
+            continue
+        has_session = False
+        for s in sub_dirs:
+            if any(
+                ses.is_dir() and ses.name.startswith("ses-")
+                for ses in s.iterdir()
+            ):
+                has_session = True
+                break
+        if not has_session:
+            ids.append(d.name)
+    return ids
+
+
+@requires_bids_examples
+@pytest.mark.integration
+class TestSessionRenameSweep:
+    """Rename a session in each multi-session dataset (dry-run)."""
+
+    @pytest.mark.ai_generated
+    @pytest.mark.parametrize("ds_name", _find_session_dataset_ids())
+    def test_session_rename_dry_run(self, ds_name: str) -> None:
+        ds_path = BIDS_EXAMPLES_DIR / ds_name
+        try:
+            ds = BIDSDataset.from_path(ds_path)
+        except (FileNotFoundError, ValueError) as exc:
+            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+
+        # Find first session in first subject
+        sub_dirs = sorted(
+            d
+            for d in ds_path.iterdir()
+            if d.is_dir() and d.name.startswith("sub-")
+        )
+        ses_dir = None
+        for s in sub_dirs:
+            for child in sorted(s.iterdir()):
+                if child.is_dir() and child.name.startswith("ses-"):
+                    ses_dir = child
+                    break
+            if ses_dir is not None:
+                break
+
+        if ses_dir is None:
+            pytest.skip(reason=f"no ses-* directory in {ds_name}")
+
+        old_label = ses_dir.name.removeprefix("ses-")
+        result = rename_session(ds, old_label, "TESTZZ99", dry_run=True)
+
+        assert result.success, (
+            f"Dry-run session rename failed in {ds_name}: {result.errors}"
+        )
+        assert result.dry_run
+
+    @pytest.mark.ai_generated
+    @pytest.mark.parametrize("ds_name", _find_sessionless_dataset_ids())
+    def test_move_into_session_dry_run(self, ds_name: str) -> None:
+        """Dry-run introducing a session to sessionless datasets."""
+        ds_path = BIDS_EXAMPLES_DIR / ds_name
+        try:
+            ds = BIDSDataset.from_path(ds_path)
+        except (FileNotFoundError, ValueError) as exc:
+            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+
+        result = rename_session(ds, "", "baseline", dry_run=True)
+
+        assert result.dry_run
+        # Either creates changes or warns about subjects without datatype dirs
+        assert result.success
+
+
+@requires_bids_examples
+@pytest.mark.integration
+class TestMetadataSweep:
+    """Run metadata operations on each dataset (dry-run)."""
+
+    @pytest.mark.ai_generated
+    @pytest.mark.parametrize("ds_name", _dataset_ids())
+    def test_aggregate_dry_run(self, ds_name: str) -> None:
+        ds_path = BIDS_EXAMPLES_DIR / ds_name
+        try:
+            ds = BIDSDataset.from_path(ds_path)
+        except (FileNotFoundError, ValueError) as exc:
+            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+
+        result = aggregate_metadata(ds, dry_run=True)
+        assert result.dry_run
+        assert result.success
+
+    @pytest.mark.ai_generated
+    @pytest.mark.parametrize("ds_name", _dataset_ids())
+    def test_segregate_dry_run(self, ds_name: str) -> None:
+        ds_path = BIDS_EXAMPLES_DIR / ds_name
+        try:
+            ds = BIDSDataset.from_path(ds_path)
+        except (FileNotFoundError, ValueError) as exc:
+            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+
+        result = segregate_metadata(ds, dry_run=True)
+        assert result.dry_run
+        assert result.success
+
+    @pytest.mark.ai_generated
+    @pytest.mark.parametrize("ds_name", _dataset_ids())
+    def test_audit_no_crash(self, ds_name: str) -> None:
+        ds_path = BIDS_EXAMPLES_DIR / ds_name
+        try:
+            ds = BIDSDataset.from_path(ds_path)
+        except (FileNotFoundError, ValueError) as exc:
+            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+
+        result = audit_metadata(ds)
+        # Should never crash — just reports inconsistencies
+        assert isinstance(result.total_files, int)
+
+
+def _find_run_file(ds_path: Path) -> tuple[str, str] | None:
+    """Find a subject and run label from a dataset.
+
+    Returns (subject_label, run_label) or None.
+    """
+    import re
+
+    for f in sorted(ds_path.rglob("sub-*_*run-*_*")):
+        if not f.is_file():
+            continue
+        m_sub = re.search(r"(sub-[^_/]+)", f.name)
+        m_run = re.search(r"(run-\d+)", f.name)
+        if m_sub and m_run:
+            return m_sub.group(1), m_run.group(1)
+    return None
+
+
+@requires_bids_examples
+@pytest.mark.integration
+class TestRemoveSweep:
+    """Dry-run remove operations on bids-examples datasets."""
+
+    @pytest.mark.ai_generated
+    @pytest.mark.parametrize("ds_name", _dataset_ids())
+    def test_remove_subject_dry_run(self, ds_name: str) -> None:
+        ds_path = BIDS_EXAMPLES_DIR / ds_name
+        try:
+            ds = BIDSDataset.from_path(ds_path)
+        except (FileNotFoundError, ValueError) as exc:
+            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+
+        sub_dirs = sorted(
+            d
+            for d in ds_path.iterdir()
+            if d.is_dir() and d.name.startswith("sub-")
+        )
+        if not sub_dirs:
+            pytest.skip(reason=f"no sub-* directories in {ds_name}")
+
+        result = remove_subject(ds, sub_dirs[0].name, dry_run=True, force=True)
+        assert result.dry_run
+        assert result.success, (
+            f"Dry-run remove subject failed in {ds_name}: {result.errors}"
+        )
+        assert len(result.changes) >= 1
+
+    @pytest.mark.ai_generated
+    @pytest.mark.parametrize("ds_name", _dataset_ids())
+    def test_remove_run_dry_run(self, ds_name: str) -> None:
+        ds_path = BIDS_EXAMPLES_DIR / ds_name
+        try:
+            ds = BIDSDataset.from_path(ds_path)
+        except (FileNotFoundError, ValueError) as exc:
+            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+
+        hit = _find_run_file(ds_path)
+        if hit is None:
+            pytest.skip(reason=f"no run-* files in {ds_name}")
+
+        sub_label, run_label = hit
+        result = remove_run(ds, sub_label, run_label, dry_run=True)
+        assert result.dry_run
+        assert result.success, (
+            f"Dry-run remove run failed in {ds_name}: {result.errors}"
+        )
+        assert len(result.changes) >= 1
+
+
+@requires_bids_examples
+@pytest.mark.integration
+class TestMergeSweep:
+    """Dry-run merge of bids-examples dataset pairs."""
+
+    @pytest.mark.ai_generated
+    def test_merge_two_datasets_dry_run(self, tmp_path: Path) -> None:
+        """Pick two datasets with non-overlapping subjects, dry-run merge."""
+        datasets = _iter_datasets()
+        if len(datasets) < 2:
+            pytest.skip(reason="need at least 2 bids-examples datasets")
+
+        # Find two datasets that each have subjects
+        candidates = []
+        for d in datasets:
+            subs = [
+                s.name
+                for s in d.iterdir()
+                if s.is_dir() and s.name.startswith("sub-")
+            ]
+            if subs:
+                candidates.append((d, set(subs)))
+            if len(candidates) >= 2:
+                break
+
+        if len(candidates) < 2:
+            pytest.skip(reason="need at least 2 datasets with subjects")
+
+        ds1_path, ds1_subs = candidates[0]
+        ds2_path, ds2_subs = candidates[1]
+
+        target = tmp_path / "merged"
+
+        if ds1_subs & ds2_subs:
+            # Overlapping subjects — use into_sessions to avoid conflict
+            result = merge_datasets(
+                [ds1_path, ds2_path],
+                target,
+                into_sessions=["ses-A", "ses-B"],
+                dry_run=True,
+            )
+        else:
+            result = merge_datasets(
+                [ds1_path, ds2_path],
+                target,
+                dry_run=True,
+            )
+
+        assert result.dry_run
+        assert result.success, f"Dry-run merge failed: {result.errors}"
+        assert len(result.changes) >= 1
+
+    @pytest.mark.ai_generated
+    @pytest.mark.parametrize("ds_name", _dataset_ids())
+    def test_merge_single_dataset_into_sessions_dry_run(
+        self, ds_name: str, tmp_path: Path
+    ) -> None:
+        """Merge a single dataset into a new target with a session label."""
+        ds_path = BIDS_EXAMPLES_DIR / ds_name
+        sub_dirs = [
+            d
+            for d in ds_path.iterdir()
+            if d.is_dir() and d.name.startswith("sub-")
+        ]
+        if not sub_dirs:
+            pytest.skip(reason=f"no subjects in {ds_name}")
+
+        target = tmp_path / "merged"
+        result = merge_datasets(
+            [ds_path],
+            target,
+            into_sessions=["ses-orig"],
+            dry_run=True,
+        )
+
+        assert result.dry_run
+        assert result.success, (
+            f"Dry-run single-dataset merge failed for {ds_name}: {result.errors}"
         )
