@@ -24,7 +24,7 @@ def merge(
     output: str,
     into_sessions: tuple[str, ...],
     on_conflict: str,
-    dry_run: bool,
+    dry_run: str | None,
     json_output: bool,
     verbose: int,
     quiet: bool,
@@ -39,7 +39,7 @@ def merge(
         output,
         into_sessions=sessions,
         on_conflict=on_conflict,  # type: ignore[arg-type]
-        dry_run=dry_run,
+        dry_run=bool(dry_run),
     )
 
     output_result(result, json_output, dry_run)

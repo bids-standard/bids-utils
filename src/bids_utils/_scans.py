@@ -3,18 +3,31 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from bids_utils._tsv import read_tsv, write_tsv
 
+if TYPE_CHECKING:
+    from bids_utils._types import AnnexedMode
+    from bids_utils._vcs import VCSBackend
 
-def read_scans_tsv(path: Path) -> list[dict[str, str]]:
+
+def read_scans_tsv(
+    path: Path,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode | None = None,
+) -> list[dict[str, str]]:
     """Read a _scans.tsv file into a list of row dicts."""
-    return read_tsv(path)
+    return read_tsv(path, vcs=vcs, annexed_mode=annexed_mode)
 
 
-def write_scans_tsv(path: Path, rows: list[dict[str, str]]) -> None:
+def write_scans_tsv(
+    path: Path,
+    rows: list[dict[str, str]],
+    vcs: VCSBackend | None = None,
+) -> None:
     """Write rows back to a _scans.tsv file."""
-    write_tsv(path, rows)
+    write_tsv(path, rows, vcs=vcs)
 
 
 def find_scans_tsv(file_path: Path, dataset_root: Path) -> Path | None:
@@ -42,30 +55,37 @@ def update_scans_entry(
     scans_path: Path,
     old_filename: str,
     new_filename: str,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode | None = None,
 ) -> bool:
     """Update a filename reference in a _scans.tsv file.
 
     Returns True if an entry was updated, False if not found.
     """
-    rows = read_scans_tsv(scans_path)
+    rows = read_scans_tsv(scans_path, vcs=vcs, annexed_mode=annexed_mode)
     updated = False
     for row in rows:
         if row.get("filename") == old_filename:
             row["filename"] = new_filename
             updated = True
     if updated:
-        write_scans_tsv(scans_path, rows)
+        write_scans_tsv(scans_path, rows, vcs=vcs)
     return updated
 
 
-def remove_scans_entry(scans_path: Path, filename: str) -> bool:
+def remove_scans_entry(
+    scans_path: Path,
+    filename: str,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode | None = None,
+) -> bool:
     """Remove a filename entry from a _scans.tsv file.
 
     Returns True if an entry was removed, False if not found.
     """
-    rows = read_scans_tsv(scans_path)
+    rows = read_scans_tsv(scans_path, vcs=vcs, annexed_mode=annexed_mode)
     new_rows = [r for r in rows if r.get("filename") != filename]
     if len(new_rows) < len(rows):
-        write_scans_tsv(scans_path, new_rows)
+        write_scans_tsv(scans_path, new_rows, vcs=vcs)
         return True
     return False

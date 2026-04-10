@@ -20,7 +20,7 @@ def remove_run_cmd(
     subject: str,
     run: str,
     shift: bool,
-    dry_run: bool,
+    dry_run: str | None,
     json_output: bool,
     verbose: int,
     quiet: bool,
@@ -30,6 +30,6 @@ def remove_run_cmd(
     """Remove a run and optionally reindex subsequent runs."""
     dataset = load_dataset()
 
-    result = remove_run(dataset, subject, run, shift=shift, dry_run=dry_run)
+    result = remove_run(dataset, subject, run, shift=shift, dry_run=bool(dry_run))
 
     output_result(result, json_output, dry_run)

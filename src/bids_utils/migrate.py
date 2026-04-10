@@ -14,8 +14,11 @@ from pathlib import Path
 from typing import Any
 
 from bids_utils._dataset import BIDSDataset
+from bids_utils._io import read_json as _read_json
+from bids_utils._io import write_json as _write_json
 from bids_utils._scans import find_scans_tsv, read_scans_tsv, write_scans_tsv
-from bids_utils._types import BIDSPath, Change
+from bids_utils._types import AnnexedMode, BIDSPath, Change
+from bids_utils._vcs import VCSBackend
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -330,6 +333,15 @@ _register_rule(
 # ---------------------------------------------------------------------------
 
 
+def _read_json_safe(
+    path: Path,
+    vcs: VCSBackend | None,
+    mode: AnnexedMode,
+) -> dict[str, Any] | None:
+    """Read JSON gracefully, delegating to ``_io.read_json``."""
+    return _read_json(path, vcs, mode)
+
+
 def _scan_json_files(dataset_root: Path) -> list[Path]:
     """Find all JSON sidecar files in the dataset."""
     return sorted(dataset_root.rglob("*.json"))
@@ -338,15 +350,14 @@ def _scan_json_files(dataset_root: Path) -> list[Path]:
 def _scan_for_field_rename(
     json_files: list[Path],
     rule: MigrationRule,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR,
 ) -> list[MigrationFinding]:
     """Scan for deprecated metadata field names."""
     findings: list[MigrationFinding] = []
     for jf in json_files:
-        try:
-            data = json.loads(jf.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            continue
-        if not isinstance(data, dict):
+        data = _read_json_safe(jf, vcs, annexed_mode)
+        if data is None:
             continue
         if rule.old_field and rule.old_field in data:
             findings.append(
@@ -363,15 +374,14 @@ def _scan_for_field_rename(
 def _scan_for_enum_rename(
     json_files: list[Path],
     rule: MigrationRule,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR,
 ) -> list[MigrationFinding]:
     """Scan for deprecated enum values."""
     findings: list[MigrationFinding] = []
     for jf in json_files:
-        try:
-            data = json.loads(jf.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            continue
-        if not isinstance(data, dict):
+        data = _read_json_safe(jf, vcs, annexed_mode)
+        if data is None:
             continue
         key = rule.metadata_key
         if key and key in data and data[key] == rule.old_value:
@@ -389,6 +399,8 @@ def _scan_for_enum_rename(
 def _scan_for_path_format(
     json_files: list[Path],
     rule: MigrationRule,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR,
 ) -> list[MigrationFinding]:
     """Scan for relative paths that should be BIDS URIs."""
     findings: list[MigrationFinding] = []
@@ -397,11 +409,8 @@ def _scan_for_path_format(
         return findings
 
     for jf in json_files:
-        try:
-            data = json.loads(jf.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            continue
-        if not isinstance(data, dict) or key not in data:
+        data = _read_json_safe(jf, vcs, annexed_mode)
+        if data is None or key not in data:
             continue
 
         value = data[key]
@@ -428,15 +437,14 @@ def _scan_for_scandate(
     dataset_root: Path,
     json_files: list[Path],
     rule: MigrationRule,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR,
 ) -> list[MigrationFinding]:
     """Scan for ScanDate in JSON sidecars (should move to _scans.tsv)."""
     findings: list[MigrationFinding] = []
     for jf in json_files:
-        try:
-            data = json.loads(jf.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            continue
-        if not isinstance(data, dict):
+        data = _read_json_safe(jf, vcs, annexed_mode)
+        if data is None:
             continue
         if "ScanDate" in data:
             findings.append(
@@ -453,17 +461,16 @@ def _scan_for_scandate(
 def _scan_for_doi_format(
     json_files: list[Path],
     rule: MigrationRule,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR,
 ) -> list[MigrationFinding]:
     """Scan for bare DOIs that should be URI format."""
     findings: list[MigrationFinding] = []
     for jf in json_files:
         if not jf.name.endswith("dataset_description.json"):
             continue
-        try:
-            data = json.loads(jf.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            continue
-        if not isinstance(data, dict):
+        data = _read_json_safe(jf, vcs, annexed_mode)
+        if data is None:
             continue
         doi = data.get("DatasetDOI", "")
         if isinstance(doi, str) and re.match(r"^10\.", doi):
@@ -482,7 +489,7 @@ def _scan_bids_files(dataset_root: Path) -> list[Path]:
     """Find all BIDS data files (non-JSON, non-TSV) in the dataset."""
     results: list[Path] = []
     for p in sorted(dataset_root.rglob("*")):
-        if not p.is_file():
+        if p.is_dir():
             continue
         # Skip non-BIDS directories
         rel = p.relative_to(dataset_root)
@@ -550,6 +557,8 @@ def _scan_for_suffix_deprecation(
 def _scan_for_deprecated_template(
     json_files: list[Path],
     rule: MigrationRule,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR,
 ) -> list[MigrationFinding]:
     """Scan for deprecated template identifiers in coordinate system fields."""
     findings: list[MigrationFinding] = []
@@ -558,11 +567,8 @@ def _scan_for_deprecated_template(
         return findings
 
     for jf in json_files:
-        try:
-            data = json.loads(jf.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            continue
-        if not isinstance(data, dict):
+        data = _read_json_safe(jf, vcs, annexed_mode)
+        if data is None:
             continue
 
         for key in _COORDINATE_SYSTEM_KEYS:
@@ -624,10 +630,13 @@ def _scan_for_entity_rename(
 def _scan_for_metadata_key_change(
     json_files: list[Path],
     rule: MigrationRule,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR,
 ) -> list[MigrationFinding]:
     """Scan for metadata keys that changed in 2.0."""
-    # Reuse the field_rename scanner — same logic, different category label
-    return _scan_for_field_rename(json_files, rule)
+    return _scan_for_field_rename(
+        json_files, rule, vcs=vcs, annexed_mode=annexed_mode
+    )
 
 
 def _scan_for_structural_reorg(
@@ -704,12 +713,15 @@ def _apply_entity_rename(
 # ---------------------------------------------------------------------------
 
 
-def _apply_field_rename(finding: MigrationFinding) -> Change | None:
+def _apply_field_rename(
+    finding: MigrationFinding,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR,
+) -> Change | None:
     """Apply a metadata field rename."""
     jf = finding.file
-    try:
-        data = json.loads(jf.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    data = _read_json_safe(jf, vcs, annexed_mode)
+    if data is None:
         return None
     rule = finding.rule
     if rule.old_field and rule.old_field in data:
@@ -726,7 +738,12 @@ def _apply_field_rename(finding: MigrationFinding) -> Change | None:
                 # else: existing value takes precedence
             else:
                 data[rule.new_field] = value
-        jf.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        if vcs is not None:
+            _write_json(jf, data, vcs)
+        else:
+            jf.write_text(
+                json.dumps(data, indent=2) + "\n", encoding="utf-8"
+            )
         return Change(
             action="modify",
             source=jf,
@@ -735,18 +752,26 @@ def _apply_field_rename(finding: MigrationFinding) -> Change | None:
     return None
 
 
-def _apply_enum_rename(finding: MigrationFinding) -> Change | None:
+def _apply_enum_rename(
+    finding: MigrationFinding,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR,
+) -> Change | None:
     """Apply an enum value rename."""
     jf = finding.file
-    try:
-        data = json.loads(jf.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    data = _read_json_safe(jf, vcs, annexed_mode)
+    if data is None:
         return None
     rule = finding.rule
     key = rule.metadata_key
     if key and key in data and data[key] == rule.old_value:
         data[key] = rule.new_value
-        jf.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        if vcs is not None:
+            _write_json(jf, data, vcs)
+        else:
+            jf.write_text(
+                json.dumps(data, indent=2) + "\n", encoding="utf-8"
+            )
         return Change(
             action="modify",
             source=jf,
@@ -755,12 +780,15 @@ def _apply_enum_rename(finding: MigrationFinding) -> Change | None:
     return None
 
 
-def _apply_path_format(finding: MigrationFinding) -> Change | None:
+def _apply_path_format(
+    finding: MigrationFinding,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR,
+) -> Change | None:
     """Convert relative path to BIDS URI."""
     jf = finding.file
-    try:
-        data = json.loads(jf.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    data = _read_json_safe(jf, vcs, annexed_mode)
+    if data is None:
         return None
     rule = finding.rule
     key = rule.metadata_key
@@ -783,7 +811,12 @@ def _apply_path_format(finding: MigrationFinding) -> Change | None:
         data[key] = new_list
 
     if modified:
-        jf.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        if vcs is not None:
+            _write_json(jf, data, vcs)
+        else:
+            jf.write_text(
+                json.dumps(data, indent=2) + "\n", encoding="utf-8"
+            )
         return Change(
             action="modify",
             source=jf,
@@ -793,25 +826,32 @@ def _apply_path_format(finding: MigrationFinding) -> Change | None:
 
 
 def _apply_scandate_move(
-    finding: MigrationFinding, dataset_root: Path
+    finding: MigrationFinding,
+    dataset_root: Path,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR,
 ) -> Change | None:
     """Move ScanDate from JSON to _scans.tsv acq_time."""
     jf = finding.file
-    try:
-        data = json.loads(jf.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    data = _read_json_safe(jf, vcs, annexed_mode)
+    if data is None:
         return None
 
     scan_date = data.pop("ScanDate", None)
     if scan_date is None:
         return None
 
-    jf.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    if vcs is not None:
+        _write_json(jf, data, vcs)
+    else:
+        jf.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
     # Try to find the corresponding _scans.tsv and update acq_time
     scans_path = find_scans_tsv(jf, dataset_root)
     if scans_path is not None:
-        rows = read_scans_tsv(scans_path)
+        rows = read_scans_tsv(
+            scans_path, vcs=vcs, annexed_mode=annexed_mode
+        )
         # Find the data file that corresponds to this JSON
         stem = jf.stem  # e.g., sub-01_bold
         for row in rows:
@@ -820,7 +860,7 @@ def _apply_scandate_move(
                 if not row.get("acq_time"):
                     row["acq_time"] = scan_date
                 break
-        write_scans_tsv(scans_path, rows)
+        write_scans_tsv(scans_path, rows, vcs=vcs)
 
     return Change(
         action="modify",
@@ -829,17 +869,25 @@ def _apply_scandate_move(
     )
 
 
-def _apply_doi_format(finding: MigrationFinding) -> Change | None:
+def _apply_doi_format(
+    finding: MigrationFinding,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR,
+) -> Change | None:
     """Convert bare DOI to URI format."""
     jf = finding.file
-    try:
-        data = json.loads(jf.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    data = _read_json_safe(jf, vcs, annexed_mode)
+    if data is None:
         return None
     doi = data.get("DatasetDOI", "")
     if isinstance(doi, str) and re.match(r"^10\.", doi):
         data["DatasetDOI"] = f"doi:{doi}"
-        jf.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        if vcs is not None:
+            _write_json(jf, data, vcs)
+        else:
+            jf.write_text(
+                json.dumps(data, indent=2) + "\n", encoding="utf-8"
+            )
         return Change(
             action="modify",
             source=jf,
@@ -930,20 +978,40 @@ def migrate_dataset(
 
     # Scan all JSON files
     json_files = _scan_json_files(dataset.root)
+    vcs = dataset.vcs
+    amode = dataset.annexed_mode
 
     # Scan for findings per rule category
     scanners: dict[str, Callable[..., list[MigrationFinding]]] = {
-        "field_rename": lambda r: _scan_for_field_rename(json_files, r),
-        "enum_rename": lambda r: _scan_for_enum_rename(json_files, r),
-        "path_format": lambda r: _scan_for_path_format(json_files, r),
-        "cross_file_move": lambda r: _scan_for_scandate(dataset.root, json_files, r),
-        "value_rename": lambda r: _scan_for_doi_format(json_files, r),
-        "suffix_deprecation": lambda r: _scan_for_suffix_deprecation(dataset.root, r),
-        "deprecated_template": lambda r: _scan_for_deprecated_template(json_files, r),
+        "field_rename": lambda r: _scan_for_field_rename(
+            json_files, r, vcs=vcs, annexed_mode=amode
+        ),
+        "enum_rename": lambda r: _scan_for_enum_rename(
+            json_files, r, vcs=vcs, annexed_mode=amode
+        ),
+        "path_format": lambda r: _scan_for_path_format(
+            json_files, r, vcs=vcs, annexed_mode=amode
+        ),
+        "cross_file_move": lambda r: _scan_for_scandate(
+            dataset.root, json_files, r, vcs=vcs, annexed_mode=amode
+        ),
+        "value_rename": lambda r: _scan_for_doi_format(
+            json_files, r, vcs=vcs, annexed_mode=amode
+        ),
+        "suffix_deprecation": lambda r: _scan_for_suffix_deprecation(
+            dataset.root, r
+        ),
+        "deprecated_template": lambda r: _scan_for_deprecated_template(
+            json_files, r, vcs=vcs, annexed_mode=amode
+        ),
         # 2.0-specific categories
         "entity_rename": lambda r: _scan_for_entity_rename(dataset.root, r),
-        "metadata_key_change": lambda r: _scan_for_metadata_key_change(json_files, r),
-        "structural_reorg": lambda r: _scan_for_structural_reorg(dataset.root, r),
+        "metadata_key_change": lambda r: _scan_for_metadata_key_change(
+            json_files, r, vcs=vcs, annexed_mode=amode
+        ),
+        "structural_reorg": lambda r: _scan_for_structural_reorg(
+            dataset.root, r
+        ),
     }
 
     for rule in rules:
@@ -978,15 +1046,27 @@ def migrate_dataset(
 
     # Apply fixes
     appliers: dict[str, Callable[..., Change | None]] = {
-        "field_rename": lambda f: _apply_field_rename(f),
-        "enum_rename": lambda f: _apply_enum_rename(f),
-        "path_format": lambda f: _apply_path_format(f),
-        "cross_file_move": lambda f: _apply_scandate_move(f, dataset.root),
-        "value_rename": lambda f: _apply_doi_format(f),
+        "field_rename": lambda f: _apply_field_rename(
+            f, vcs=vcs, annexed_mode=amode
+        ),
+        "enum_rename": lambda f: _apply_enum_rename(
+            f, vcs=vcs, annexed_mode=amode
+        ),
+        "path_format": lambda f: _apply_path_format(
+            f, vcs=vcs, annexed_mode=amode
+        ),
+        "cross_file_move": lambda f: _apply_scandate_move(
+            f, dataset.root, vcs=vcs, annexed_mode=amode
+        ),
+        "value_rename": lambda f: _apply_doi_format(
+            f, vcs=vcs, annexed_mode=amode
+        ),
         "suffix_deprecation": lambda f: _apply_suffix_deprecation(f, dataset),
         # 2.0-specific appliers
         "entity_rename": lambda f: _apply_entity_rename(f, dataset),
-        "metadata_key_change": lambda f: _apply_field_rename(f),
+        "metadata_key_change": lambda f: _apply_field_rename(
+            f, vcs=vcs, annexed_mode=amode
+        ),
         # deprecated_template, structural_reorg: no applier — can_auto_fix=False
     }
 

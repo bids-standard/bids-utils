@@ -53,6 +53,34 @@
 
 ---
 
+## Phase 1b: Annexed Content Handling (FR-022)
+
+**Purpose**: Content-aware I/O layer so all commands work correctly on git-annex/DataLad datasets where file content may not be locally available. Retroactively completes the VCS integration promise from Phase 1.
+
+**Independent Test**: Run `bids-utils --annexed=get session-rename` on a DataLad dataset with annexed `_scans.tsv` — content is auto-fetched, rename succeeds.
+
+### Foundation
+
+- [X] T086 Add `AnnexedMode` enum (`error`, `get`, `skip-warning`, `skip`) and `ContentNotAvailableError` exception to `src/bids_utils/_types.py`. Add `annexed_mode: AnnexedMode` field to `BIDSDataset` in `src/bids_utils/_dataset.py` (default: `AnnexedMode.ERROR`).
+- [X] T087 Extend `VCSBackend` protocol in `src/bids_utils/_vcs.py` with four new methods: `has_content(path: Path) -> bool`, `get_content(paths: list[Path]) -> None` for reads; `unlock(paths: list[Path]) -> None`, `add(paths: list[Path]) -> None` for writes. Implement for all backends: `NoVCS` all no-op/True; `Git` has_content=True, unlock=no-op, add=`git add`; `GitAnnex` checks symlink target, runs `git annex get/unlock/add`; `DataLad` uses `datalad get/unlock`, `git annex add`.
+
+### Content-aware I/O layer
+
+- [X] T088 Create `src/bids_utils/_io.py` with: `ensure_content(path, vcs, annexed_mode)` enforcing `--annexed` policy for reads; `ensure_writable(path, vcs)` calling `vcs.unlock()` for locked annexed files before writes (always, independent of `--annexed` mode); `mark_modified(paths, vcs)` calling `vcs.add()` after writes to re-annex; `read_json(path, vcs, mode) -> dict | None` and `write_json(path, data, vcs)` helpers.
+- [X] T089 Wire content-aware I/O through existing code: update `_tsv.read_tsv`/`write_tsv` to accept optional `vcs`/`annexed_mode` params; update callers in `_scans.py`, `_participants.py`, `session.py`, `subject.py`, `rename.py` to pass `dataset.vcs`/`dataset.annexed_mode`. Replace inline `json.loads(f.read_text())` in `metadata.py` and `migrate.py` with `_io.read_json()`. Replace inline `f.write_text(json.dumps(...))` with `_io.write_json()` (which brackets with ensure_writable/mark_modified).
+
+### CLI wiring
+
+- [X] T090 Add `--annexed` option to CLI group in `src/bids_utils/cli/__init__.py` (with `envvar="BIDS_UTILS_ANNEXED"`). Update `load_dataset()` in `_common.py` to set `annexed_mode` on the returned `BIDSDataset` from Click context. All existing subcommands inherit automatically.
+
+### Tests
+
+- [X] T091 Write tests: `tests/test_io.py` for `ensure_content`/`ensure_writable`/`mark_modified`/`read_json`/`write_json` with all four annexed modes using mock VCS; `tests/test_vcs.py` additions for `has_content`/`get_content`/`unlock`/`add` on all backends; `tests/test_cli_common.py` additions for `--annexed` group option flow and env var; integration test with actual git-annex repo (locked files: read requires get+unlock, write unlocks then re-adds).
+
+**Checkpoint**: `bids-utils --annexed=get session-rename` works on a git-annex dataset — content is fetched, locked files are unlocked for modification, and re-annexed after writes. All existing tests still pass. `--annexed=error` gives an informative error pointing to `--annexed=get`.
+
+---
+
 ## Phase 2: User Story 1 — Rename a BIDS File (Priority: P1)
 
 **Goal**: `bids-utils rename` working end-to-end — rename a file and all its sidecars, update `_scans.tsv`, use VCS when present.
@@ -266,11 +294,38 @@
 
 ### Implementation
 
-- [ ] T083 [P] Implement `src/bids_utils/cli/completion.py`: `bids-utils completion [SHELL]` click command — auto-detect shell from `$SHELL`, output activation script to stdout. Supported: Bash, Zsh, Fish (Click 8.0+ built-in).
-- [ ] T084 Implement BIDS-aware custom completions: filesystem-derived items (`sub-*` directories, `ses-*` directories, BIDS file paths) and entity keys from schema (`task=`, `run=`, `acq=`). Uses `_dataset.py` for dataset root resolution (FR-020: honor `--dataset` or walk up from CWD to `dataset_description.json`).
-- [ ] T085 Write tests for completion in `tests/test_cli.py` or `tests/test_completion.py`: `bids-utils completion --help`, shell detection, activation script output for each shell, BIDS-aware completion produces expected items
+- [X] T083 [P] Implement `src/bids_utils/cli/completion.py`: `bids-utils completion [SHELL]` click command — auto-detect shell from `$SHELL`, output activation script to stdout. Supported: Bash, Zsh, Fish (Click 8.0+ built-in).
+- [X] T084 Implement BIDS-aware custom completions: filesystem-derived items (`sub-*` directories, `ses-*` directories, BIDS file paths) and entity keys from schema (`task=`, `run=`, `acq=`). Uses `_dataset.py` for dataset root resolution (FR-020: honor `--dataset` or walk up from CWD to `dataset_description.json`).
+- [X] T085 Write tests for completion in `tests/test_cli.py` or `tests/test_completion.py`: `bids-utils completion --help`, shell detection, activation script output for each shell, BIDS-aware completion produces expected items
 
 **Checkpoint**: `bids-utils completion` outputs working activation scripts with BIDS-aware completions.
+
+---
+
+## Phase 1c: Symlink Safety & Dry-Run Detail (FR-003, FR-023, FR-024)
+
+**Purpose**: Fix critical git-annex symlink handling bug and enhance `--dry-run` to show per-file detail. These are blocking issues for real-world usage on annexed datasets.
+
+### Bug fix: `is_file()` skips annexed symlinks (FR-023)
+
+- [X] T092 Replace all bare `path.is_file()` calls used for file iteration with `not path.is_dir()` (or `path.is_file() or path.is_symlink()`) in: `session.py` (2 sites), `subject.py` (2 sites), `run.py` (2 sites), `split.py` (1 site), `merge.py` (1 site), `_sidecars.py` (1 site), `migrate.py` (1 site). Preserve `is_file()` where semantically correct (e.g., `_dataset.py` checking `dataset_description.json` existence, `_scans.py` checking `_scans.tsv` existence — these are never annexed).
+- [X] T093 Add `tmp_annex_dataset` pytest fixture in `tests/conftest.py`: creates a git-annex repo with locked (symlinked) data files (`.nii.gz`) alongside regular git files (`.json`, `.tsv`). Requires `git annex` to be installed (mark tests `skipif` otherwise).
+- [X] T094 Write regression tests using `tmp_annex_dataset` for session-rename, subject-rename, and rename — verify that ALL files (including annexed symlinks) are renamed correctly (SC-008). Test both with content present and content absent.
+
+### Enhanced dry-run (FR-003 update)
+
+- [X] T095 Change `--dry-run` / `-n` from a boolean flag to an optional-value option: `--dry-run` (or `--dry-run=overview`) for current summary behavior, `--dry-run=detailed` for per-file listing. Update `common_options` in `cli/_common.py`, `OperationResult`, and `output_result()`. Library functions already populate `result.changes` with per-file detail — the change is in how `output_result` renders them.
+- [X] T096 Ensure all library functions populate `result.changes` with per-file detail (not just one summary `Change` per subject/session). Audit `session.py`, `subject.py`, `rename.py` — the rename function already does this; session/subject need to add per-file `Change` entries for individual file renames within the session/subject operation.
+
+### Annex operation logging (FR-024)
+
+- [X] T097 Add logging to `_io.py` for annex operations: log at INFO level when `ensure_content` fetches a file (`--annexed=get`), when `ensure_writable` unlocks, when `mark_modified` re-adds. In `--dry-run` mode, report which files would need content fetched. Wire through to CLI verbosity (`-v` enables DEBUG, default shows INFO, `-q` suppresses).
+
+### Tests
+
+- [X] T098 Write tests for `--dry-run=detailed` output: verify per-file change listing for session-rename, subject-rename, rename. Verify `--dry-run=overview` retains current behavior. Verify `--dry-run` without value defaults to overview.
+
+**Checkpoint**: `bids-utils --annexed=get session-rename --dry-run=detailed` shows every file that would be renamed/edited/fetched. Running without `--dry-run` on an annexed dataset correctly renames all files including symlinks.
 
 ---
 
@@ -294,6 +349,8 @@
 
 - **Phase 0 (Scaffolding)**: No dependencies — start immediately
 - **Phase 1 (Infrastructure)**: Depends on Phase 0 — BLOCKS all user stories
+- **Phase 1b (Annexed Content / FR-022)**: Depends on Phase 1. Can be done at any point but SHOULD be done before real-world usage on git-annex/DataLad datasets. Retroactively completes VCS integration from Phase 1.
+- **Phase 1c (Symlink Safety & Dry-Run Detail / FR-003, FR-023, FR-024)**: Depends on Phase 1b. BLOCKS real-world usage on annexed datasets — the symlink bug causes silent data loss (files not renamed). Should be done immediately after Phase 1b.
 - **Phase 2 (Rename / US1)**: Depends on Phase 1
 - **Phase 3 (Migrate 1.x / US2)**: Depends on Phase 2 (uses rename for suffix changes)
 - **Phase 4 (Migrate 2.0 / US3)**: Depends on Phase 3

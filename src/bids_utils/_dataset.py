@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from bids_utils._types import AnnexedMode
+
 if TYPE_CHECKING:
     from bids_utils._schema import BIDSSchema
     from bids_utils._vcs import VCSBackend
@@ -19,6 +21,7 @@ class BIDSDataset:
     root: Path
     bids_version: str
     schema_version: str | None = None
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR
     _vcs: VCSBackend | None = field(default=None, repr=False)
 
     @classmethod

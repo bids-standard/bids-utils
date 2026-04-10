@@ -63,7 +63,7 @@ def find_sidecars(
         if sidecar_ext == ext:
             continue  # Skip the primary file's own extension
         candidate = parent / f"{stem}{sidecar_ext}"
-        if candidate.is_file():
+        if candidate.exists() or candidate.is_symlink():
             sidecars.append(candidate)
 
     return sidecars

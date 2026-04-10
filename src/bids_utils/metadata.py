@@ -5,7 +5,6 @@ Uses BIDS inheritance hierarchy to manage metadata distribution.
 
 from __future__ import annotations
 
-import contextlib
 import json
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -13,7 +12,9 @@ from pathlib import Path
 from typing import Any, Literal
 
 from bids_utils._dataset import BIDSDataset
-from bids_utils._types import Change, OperationResult
+from bids_utils._io import read_json, write_json
+from bids_utils._types import AnnexedMode, Change, OperationResult
+from bids_utils._vcs import VCSBackend
 
 
 @dataclass
@@ -47,20 +48,34 @@ def _group_by_stem_suffix(files: list[Path]) -> dict[str, list[Path]]:
     return dict(groups)
 
 
-def _find_common_keys(json_files: list[Path]) -> dict[str, Any]:
+def _find_common_keys(
+    json_files: list[Path],
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode | None = None,
+) -> dict[str, Any]:
     """Find key-value pairs common to ALL files."""
     if not json_files:
         return {}
 
+    _vcs = vcs
+    _mode = annexed_mode or AnnexedMode.ERROR
+
     # Load all files
     all_data: list[dict[str, Any]] = []
     for f in json_files:
-        try:
-            data = json.loads(f.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
+        if _vcs is not None:
+            data = read_json(f, _vcs, _mode)
+            if data is not None:
                 all_data.append(data)
-        except (json.JSONDecodeError, OSError):
-            return {}  # Can't determine common keys if a file is unreadable
+            else:
+                return {}  # Can't determine common keys if a file is unreadable
+        else:
+            try:
+                raw = json.loads(f.read_text(encoding="utf-8"))
+                if isinstance(raw, dict):
+                    all_data.append(raw)
+            except (json.JSONDecodeError, OSError):
+                return {}
 
     if len(all_data) != len(json_files):
         return {}  # Some files missing or unreadable
@@ -107,11 +122,14 @@ def aggregate_metadata(
     json_files = _find_json_sidecars(dataset.root, scope_path)
     groups = _group_by_stem_suffix(json_files)
 
+    vcs = dataset.vcs
+    amode = dataset.annexed_mode
+
     for suffix, files in groups.items():
         if len(files) < 2:
             continue
 
-        common = _find_common_keys(files)
+        common = _find_common_keys(files, vcs=vcs, annexed_mode=amode)
         if not common:
             continue
 
@@ -145,17 +163,17 @@ def aggregate_metadata(
         # Write/update the parent-level sidecar
         existing: dict[str, Any] = {}
         if target.exists():
-            with contextlib.suppress(json.JSONDecodeError, OSError):
-                existing = json.loads(target.read_text(encoding="utf-8"))
+            loaded = read_json(target, vcs, amode)
+            if loaded is not None:
+                existing = loaded
         existing.update(common)
-        target.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
+        write_json(target, existing, vcs)
 
         # Remove keys from leaf files (if mode="move")
         if mode == "move":
             for f in files:
-                try:
-                    data = json.loads(f.read_text(encoding="utf-8"))
-                except (json.JSONDecodeError, OSError):
+                data = read_json(f, vcs, amode)
+                if data is None:
                     continue
                 modified = False
                 for key in common:
@@ -163,7 +181,7 @@ def aggregate_metadata(
                         del data[key]
                         modified = True
                 if modified:
-                    f.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+                    write_json(f, data, vcs)
 
     return result
 
@@ -198,6 +216,9 @@ def segregate_metadata(
         and "sub-" in f.name
     )
 
+    vcs = dataset.vcs
+    amode = dataset.annexed_mode
+
     for data_file in data_files:
         # Find the JSON sidecar for this data file
         stem = data_file.name
@@ -209,7 +230,9 @@ def segregate_metadata(
         leaf_json = data_file.parent / f"{stem}.json"
 
         # Resolve metadata through inheritance chain
-        resolved = _resolve_inheritance(data_file, dataset.root)
+        resolved = _resolve_inheritance(
+            data_file, dataset.root, vcs=vcs, annexed_mode=amode
+        )
 
         if not resolved:
             continue
@@ -225,12 +248,17 @@ def segregate_metadata(
         if dry_run:
             continue
 
-        leaf_json.write_text(json.dumps(resolved, indent=2) + "\n", encoding="utf-8")
+        write_json(leaf_json, resolved, vcs)
 
     return result
 
 
-def _resolve_inheritance(data_file: Path, dataset_root: Path) -> dict[str, Any]:
+def _resolve_inheritance(
+    data_file: Path,
+    dataset_root: Path,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode | None = None,
+) -> dict[str, Any]:
     """Resolve metadata through the BIDS inheritance chain."""
     # Extract suffix from filename
     stem = data_file.name
@@ -243,6 +271,8 @@ def _resolve_inheritance(data_file: Path, dataset_root: Path) -> dict[str, Any]:
 
     parts = stem.rsplit("_", 1)
     suffix = parts[-1] if len(parts) > 1 else stem
+
+    _mode = annexed_mode or AnnexedMode.ERROR
 
     # Walk from dataset root down to the file's directory
     resolved: dict[str, Any] = {}
@@ -260,22 +290,32 @@ def _resolve_inheritance(data_file: Path, dataset_root: Path) -> dict[str, Any]:
         # Check for suffix.json at each level
         sidecar = d / f"{suffix}.json"
         if sidecar.is_file():
-            try:
-                data = json.loads(sidecar.read_text(encoding="utf-8"))
-                if isinstance(data, dict):
+            if vcs is not None:
+                data = read_json(sidecar, vcs, _mode)
+                if data is not None:
                     resolved.update(data)
-            except (json.JSONDecodeError, OSError):
-                pass
+            else:
+                try:
+                    raw = json.loads(sidecar.read_text(encoding="utf-8"))
+                    if isinstance(raw, dict):
+                        resolved.update(raw)
+                except (json.JSONDecodeError, OSError):
+                    pass
 
     # Finally, the leaf-level sidecar (file-specific)
     leaf = data_file.parent / f"{stem}.json"
     if leaf.is_file():
-        try:
-            data = json.loads(leaf.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
+        if vcs is not None:
+            data = read_json(leaf, vcs, _mode)
+            if data is not None:
                 resolved.update(data)
-        except (json.JSONDecodeError, OSError):
-            pass
+        else:
+            try:
+                raw = json.loads(leaf.read_text(encoding="utf-8"))
+                if isinstance(raw, dict):
+                    resolved.update(raw)
+            except (json.JSONDecodeError, OSError):
+                pass
 
     return resolved
 
@@ -292,6 +332,9 @@ def audit_metadata(dataset: BIDSDataset) -> AuditResult:
 
     groups = _group_by_stem_suffix(json_files)
 
+    vcs = dataset.vcs
+    amode = dataset.annexed_mode
+
     for suffix, files in groups.items():
         if len(files) < 2:
             continue
@@ -299,12 +342,9 @@ def audit_metadata(dataset: BIDSDataset) -> AuditResult:
         # Collect all key-value pairs
         all_data: list[dict[str, Any]] = []
         for f in files:
-            try:
-                data = json.loads(f.read_text(encoding="utf-8"))
-                if isinstance(data, dict):
-                    all_data.append(data)
-            except (json.JSONDecodeError, OSError):
-                continue
+            data = read_json(f, vcs, amode)
+            if data is not None:
+                all_data.append(data)
 
         if len(all_data) < 2:
             continue

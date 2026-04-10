@@ -28,7 +28,7 @@ def metadata() -> None:
 def aggregate(
     scope: str | None,
     mode: str,
-    dry_run: bool,
+    dry_run: str | None,
     json_output: bool,
     verbose: int,
     quiet: bool,
@@ -38,7 +38,7 @@ def aggregate(
     """Hoist common metadata up the inheritance hierarchy."""
     dataset = load_dataset()
 
-    result = aggregate_metadata(dataset, scope=scope, mode=mode, dry_run=dry_run)  # type: ignore[arg-type]
+    result = aggregate_metadata(dataset, scope=scope, mode=mode, dry_run=bool(dry_run))  # type: ignore[arg-type]
 
     prefix = "[DRY RUN] " if dry_run else ""
     for change in result.changes:
@@ -50,7 +50,7 @@ def aggregate(
 @common_options
 def segregate(
     scope: str | None,
-    dry_run: bool,
+    dry_run: str | None,
     json_output: bool,
     verbose: int,
     quiet: bool,
@@ -60,7 +60,7 @@ def segregate(
     """Push all metadata down to leaf-level sidecars."""
     dataset = load_dataset()
 
-    result = segregate_metadata(dataset, scope=scope, dry_run=dry_run)
+    result = segregate_metadata(dataset, scope=scope, dry_run=bool(dry_run))
 
     prefix = "[DRY RUN] " if dry_run else ""
     for change in result.changes:
@@ -70,7 +70,7 @@ def segregate(
 @metadata.command()
 @common_options
 def audit(
-    dry_run: bool,
+    dry_run: str | None,
     json_output: bool,
     verbose: int,
     quiet: bool,

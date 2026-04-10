@@ -9,6 +9,7 @@ from bids_utils.cli import main
 
 # Expected commands that must always be present in `bids-utils --help`.
 EXPECTED_COMMANDS = [
+    "completion",
     "merge",
     "metadata",
     "migrate",

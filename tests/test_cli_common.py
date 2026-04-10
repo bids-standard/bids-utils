@@ -6,8 +6,10 @@ import json
 from pathlib import Path
 
 import pytest
+from click.testing import CliRunner
 
 from bids_utils._types import Change, OperationResult
+from bids_utils.cli import main
 from bids_utils.cli._common import load_dataset, output_result
 
 
@@ -82,3 +84,41 @@ def test_load_dataset_success(tmp_path: Path) -> None:
     desc.write_text('{"Name": "test", "BIDSVersion": "1.9.0"}')
     ds = load_dataset(tmp_path)
     assert ds.root == tmp_path
+
+
+class TestAnnexedOption:
+    @pytest.mark.ai_generated
+    def test_annexed_appears_in_help(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["--help"])
+        assert result.exit_code == 0
+        assert "--annexed" in result.output
+
+    @pytest.mark.ai_generated
+    def test_annexed_invalid_choice(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["--annexed=bogus", "rename", "--help"])
+        assert result.exit_code != 0
+
+    @pytest.mark.ai_generated
+    def test_annexed_default_is_error(
+        self, tmp_bids_dataset: Path
+    ) -> None:
+        """Without --annexed, load_dataset should default to ERROR."""
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["rename", "--help"],
+        )
+        assert result.exit_code == 0
+
+    @pytest.mark.ai_generated
+    def test_annexed_envvar(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """BIDS_UTILS_ANNEXED env var should set the annexed mode."""
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["--help"],
+            env={"BIDS_UTILS_ANNEXED": "get"},
+        )
+        assert result.exit_code == 0

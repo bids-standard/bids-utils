@@ -64,6 +64,7 @@ src/bids_utils/
 ├── _types.py            # Shared type definitions (PathLike, Entity, etc.)
 ├── _vcs.py              # VCS detection and operations (git mv, git annex, datalad)
 ├── _schema.py           # Schema loading and querying helpers (wraps bidsschematools)
+├── _io.py               # Content-aware file I/O (annexed content policy enforcement)
 ├── _tsv.py              # Shared TSV read/write utilities (used by _scans.py, _participants.py)
 ├── _scans.py            # _scans.tsv read/write/update operations
 ├── _participants.py     # participants.tsv read/write/update operations
@@ -99,6 +100,7 @@ tests/
 ├── test_merge.py        # Merge tests
 ├── test_split.py        # Split tests
 ├── test_run.py          # Run removal tests
+├── test_io.py           # Content-aware I/O tests (annexed modes)
 ├── test_vcs.py          # VCS integration tests
 ├── test_cli.py          # CLI smoke tests
 ├── test_cli_common.py   # Tests for shared CLI options/decorators
@@ -144,6 +146,41 @@ tests/
 7. **`_participants.py`**: Read/write `participants.tsv`. Add/remove/rename subject entries.
 
 **Dependencies**: Phase 0 complete
+
+### Phase 1b: Annexed Content Handling (FR-022)
+
+**Goal**: All file reads work correctly on git-annex/DataLad datasets via a `--annexed` policy option.
+
+**Steps**:
+1. **Foundation types**: Add `AnnexedMode` enum and `ContentNotAvailableError` to `_types.py`. Add `annexed_mode` field to `BIDSDataset`.
+2. **VCS protocol extension**: Extend `VCSBackend` protocol with four new methods:
+   - `has_content(path) -> bool` / `get_content(paths)` — for reads
+   - `unlock(paths)` / `add(paths)` — for writes (unlock locked annexed files before modification, re-annex after)
+   - Implementations: `NoVCS`/`Git` → trivial (always True, no-op for unlock, `git add` for add); `GitAnnex` → check symlink target, `git annex get/unlock/add`; `DataLad` → `datalad get/unlock`, `git annex add`.
+3. **Content-aware I/O** (`_io.py`):
+   - `ensure_content(path, vcs, mode)` — enforces `--annexed` policy for reads
+   - `ensure_writable(path, vcs)` — unlocks locked annexed files before writes (always, regardless of `--annexed` mode)
+   - `mark_modified(paths, vcs)` — calls `vcs.add()` after writes to re-annex files
+   - `read_json(path, vcs, mode)` / `write_json(path, data, vcs)` — content-aware JSON I/O
+4. **Wire through existing code**: Update `_tsv.read_tsv`/`write_tsv` with optional VCS/mode params. Update all callers. Replace inline JSON reads/writes in `metadata.py` (~6 read + ~3 write sites) and `migrate.py` (~11 read + ~6 write sites) with `_io` helpers.
+5. **CLI wiring**: Add `--annexed` to Click group with `envvar="BIDS_UTILS_ANNEXED"`. `load_dataset()` sets `annexed_mode` on the returned `BIDSDataset`.
+6. **Tests**: Mock VCS tests for all four modes. Unlock/add lifecycle tests. Integration test with real git-annex repo (locked files, content present/absent).
+
+**Dependencies**: Phase 1 complete. Can be done at any point after Phase 1, but should be done before real-world usage on annexed datasets.
+
+### Phase 1c: Symlink Safety & Dry-Run Detail (FR-003, FR-023, FR-024)
+
+**Goal**: Fix the `is_file()` symlink bug that silently skips annexed data files during rename operations. Enhance `--dry-run` to show per-file detail. Add annex operation logging.
+
+**Steps**:
+1. **Symlink bug fix (T092)**: Audit all `is_file()` calls used for file iteration. Replace with `not path.is_dir()` in `session.py`, `subject.py`, `run.py`, `split.py`, `merge.py`, `_sidecars.py`, `migrate.py`. Keep `is_file()` where checking for file existence (not iteration).
+2. **Annex test fixture (T093)**: `tmp_annex_dataset` in conftest.py — git-annex repo with locked symlinks alongside regular files.
+3. **Regression tests (T094)**: Session/subject/file rename on annexed dataset — verify all files including symlinks are renamed.
+4. **Dry-run detail (T095-T096)**: `--dry-run=overview|detailed`. Update `common_options`, ensure all library functions populate per-file `Change` entries. `output_result` renders overview vs detailed.
+5. **Annex logging (T097)**: INFO-level logging for get/unlock/add operations in `_io.py`.
+6. **Tests (T098)**: Verify `--dry-run=detailed` output.
+
+**Dependencies**: Phase 1b complete. BLOCKS real-world usage on annexed datasets.
 
 ### Phase 2: File Rename (Story 1 — P1)
 

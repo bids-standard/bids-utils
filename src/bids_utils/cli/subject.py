@@ -5,12 +5,17 @@ from __future__ import annotations
 import click
 
 from bids_utils.cli import main
-from bids_utils.cli._common import common_options, load_dataset, output_result
+from bids_utils.cli._common import (
+    SUBJECT_TYPE,
+    common_options,
+    load_dataset,
+    output_result,
+)
 from bids_utils.subject import remove_subject, rename_subject
 
 
 @main.command("subject-rename")
-@click.argument("old")
+@click.argument("old", type=SUBJECT_TYPE)
 @click.argument("new")
 @click.option("--include-sourcedata", is_flag=True, help="Also rename in sourcedata/.")
 @common_options
@@ -18,7 +23,7 @@ def subject_rename_cmd(
     old: str,
     new: str,
     include_sourcedata: bool,
-    dry_run: bool,
+    dry_run: str | None,
     json_output: bool,
     verbose: int,
     quiet: bool,
@@ -29,17 +34,17 @@ def subject_rename_cmd(
     dataset = load_dataset()
 
     result = rename_subject(
-        dataset, old, new, dry_run=dry_run, include_sourcedata=include_sourcedata
+        dataset, old, new, dry_run=bool(dry_run), include_sourcedata=include_sourcedata
     )
     output_result(result, json_output, dry_run)
 
 
 @main.command("remove")
-@click.argument("subject")
+@click.argument("subject", type=SUBJECT_TYPE)
 @common_options
 def remove_cmd(
     subject: str,
-    dry_run: bool,
+    dry_run: str | None,
     json_output: bool,
     verbose: int,
     quiet: bool,
@@ -55,5 +60,5 @@ def remove_cmd(
 
     dataset = load_dataset()
 
-    result = remove_subject(dataset, subject, dry_run=dry_run, force=force)
+    result = remove_subject(dataset, subject, dry_run=bool(dry_run), force=force)
     output_result(result, json_output, dry_run)
