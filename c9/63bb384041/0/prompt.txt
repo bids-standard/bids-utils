@@ -131,3 +131,7 @@ Changes to be committed:
 
 
 this suggests not only a bug but insufficient unittesting, in particular as asked in the spec on bids-examples datasets.  Review specification and adjust for more detailed and extensive testing!
+
+---
+
+go ahead
