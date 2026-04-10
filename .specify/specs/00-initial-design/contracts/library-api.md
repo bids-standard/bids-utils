@@ -10,6 +10,7 @@
 class BIDSDataset:
     root: Path
     bids_version: str
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR
 
     @classmethod
     def from_path(cls, path: str | Path) -> BIDSDataset:
@@ -160,9 +161,58 @@ def merge_datasets(
     """Merge multiple BIDS datasets."""
 ```
 
+### `bids_utils._vcs.VCSBackend` (Protocol)
+
+```python
+class VCSBackend(Protocol):
+    name: str
+
+    # Existing operations
+    def move(self, src: Path, dst: Path) -> None: ...
+    def remove(self, path: Path) -> None: ...
+    def is_dirty(self) -> bool: ...
+    def commit(self, message: str, paths: list[Path]) -> None: ...
+
+    # Content availability (FR-022)
+    def has_content(self, path: Path) -> bool: ...
+    def get_content(self, paths: list[Path]) -> None: ...
+
+    # Write lifecycle for annexed files (FR-022)
+    def unlock(self, paths: list[Path]) -> None: ...
+    def add(self, paths: list[Path]) -> None: ...
+```
+
+| Backend   | `has_content`         | `get_content`       | `unlock`              | `add`               |
+|-----------|-----------------------|---------------------|-----------------------|---------------------|
+| NoVCS     | always `True`         | no-op               | no-op                 | no-op               |
+| Git       | always `True`         | no-op               | no-op                 | `git add`           |
+| GitAnnex  | symlink target exists | `git annex get`     | `git annex unlock`    | `git annex add`     |
+| DataLad   | symlink target exists | `datalad get`       | `datalad unlock`      | `git annex add`     |
+
+### `bids_utils._io` (Content-aware I/O)
+
+```python
+def ensure_content(path: Path, vcs: VCSBackend, mode: AnnexedMode) -> None:
+    """Ensure file content is available for reading. Enforces --annexed policy."""
+
+def ensure_writable(path: Path, vcs: VCSBackend) -> None:
+    """Unlock annexed file if locked (symlink to .git/annex/objects).
+    Always applied for GitAnnex/DataLad, regardless of --annexed mode."""
+
+def mark_modified(paths: list[Path], vcs: VCSBackend) -> None:
+    """Re-annex files after modification (git annex add).
+    Always applied for GitAnnex/DataLad, regardless of --annexed mode."""
+
+def read_json(path: Path, vcs: VCSBackend, mode: AnnexedMode) -> dict | None:
+    """Read JSON with content-awareness. Returns None if skipped."""
+```
+
 ## CLI Contract
 
-All commands follow this pattern:
+Group-level options (before the command):
+- `--annexed MODE`: How to handle git-annex files without local content. Modes: `error` (default), `get`, `skip-warning`, `skip`. Also settable via `BIDS_UTILS_ANNEXED` env var.
+
+Per-command common options:
 - `--dry-run` / `-n`: Show what would change without modifying
 - `--json`: Machine-readable JSON output
 - `-v` / `-q`: Verbosity control

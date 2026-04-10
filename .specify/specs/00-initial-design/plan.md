@@ -64,6 +64,7 @@ src/bids_utils/
 ├── _types.py            # Shared type definitions (PathLike, Entity, etc.)
 ├── _vcs.py              # VCS detection and operations (git mv, git annex, datalad)
 ├── _schema.py           # Schema loading and querying helpers (wraps bidsschematools)
+├── _io.py               # Content-aware file I/O (annexed content policy enforcement)
 ├── _tsv.py              # Shared TSV read/write utilities (used by _scans.py, _participants.py)
 ├── _scans.py            # _scans.tsv read/write/update operations
 ├── _participants.py     # participants.tsv read/write/update operations
@@ -99,6 +100,7 @@ tests/
 ├── test_merge.py        # Merge tests
 ├── test_split.py        # Split tests
 ├── test_run.py          # Run removal tests
+├── test_io.py           # Content-aware I/O tests (annexed modes)
 ├── test_vcs.py          # VCS integration tests
 ├── test_cli.py          # CLI smoke tests
 ├── test_cli_common.py   # Tests for shared CLI options/decorators
@@ -144,6 +146,27 @@ tests/
 7. **`_participants.py`**: Read/write `participants.tsv`. Add/remove/rename subject entries.
 
 **Dependencies**: Phase 0 complete
+
+### Phase 1b: Annexed Content Handling (FR-022)
+
+**Goal**: All file reads work correctly on git-annex/DataLad datasets via a `--annexed` policy option.
+
+**Steps**:
+1. **Foundation types**: Add `AnnexedMode` enum and `ContentNotAvailableError` to `_types.py`. Add `annexed_mode` field to `BIDSDataset`.
+2. **VCS protocol extension**: Extend `VCSBackend` protocol with four new methods:
+   - `has_content(path) -> bool` / `get_content(paths)` — for reads
+   - `unlock(paths)` / `add(paths)` — for writes (unlock locked annexed files before modification, re-annex after)
+   - Implementations: `NoVCS`/`Git` → trivial (always True, no-op for unlock, `git add` for add); `GitAnnex` → check symlink target, `git annex get/unlock/add`; `DataLad` → `datalad get/unlock`, `git annex add`.
+3. **Content-aware I/O** (`_io.py`):
+   - `ensure_content(path, vcs, mode)` — enforces `--annexed` policy for reads
+   - `ensure_writable(path, vcs)` — unlocks locked annexed files before writes (always, regardless of `--annexed` mode)
+   - `mark_modified(paths, vcs)` — calls `vcs.add()` after writes to re-annex files
+   - `read_json(path, vcs, mode)` / `write_json(path, data, vcs)` — content-aware JSON I/O
+4. **Wire through existing code**: Update `_tsv.read_tsv`/`write_tsv` with optional VCS/mode params. Update all callers. Replace inline JSON reads/writes in `metadata.py` (~6 read + ~3 write sites) and `migrate.py` (~11 read + ~6 write sites) with `_io` helpers.
+5. **CLI wiring**: Add `--annexed` to Click group with `envvar="BIDS_UTILS_ANNEXED"`. `load_dataset()` sets `annexed_mode` on the returned `BIDSDataset`.
+6. **Tests**: Mock VCS tests for all four modes. Unlock/add lifecycle tests. Integration test with real git-annex repo (locked files, content present/absent).
+
+**Dependencies**: Phase 1 complete. Can be done at any point after Phase 1, but should be done before real-world usage on annexed datasets.
 
 ### Phase 2: File Rename (Story 1 — P1)
 

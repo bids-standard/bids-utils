@@ -209,7 +209,7 @@ A dataset needs to be split — for example, extracting only behavioral data or 
 - How does the tool handle partial datasets (e.g., missing `dataset_description.json`)?
   → **Resolution**: `BIDSDataset.from_path()` raises an error if no `dataset_description.json` is found. Covered by T013-T014.
 - What happens when a file is locked by git-annex and content is needed for metadata operations?
-  → **Resolution**: For metadata read operations, content is needed. If locked and content unavailable, skip that file with a warning. Covered by T017-T018 (VCS tests should include locked-file scenario).
+  → **Resolution**: All file reads go through a content-aware I/O layer. The behavior is controlled by the `--annexed` policy option (FR-022): `error` (default, informative message), `get` (auto-fetch), `skip-warning`, or `skip`. The VCS backend provides `has_content()` and `get_content()` methods. Covered by T086-T091.
 - How does aggregation handle `.nwb` files that embed metadata internally?
   → **Resolution**: Out of scope. bids-utils operates on BIDS sidecar metadata (`.json` files), not on embedded metadata within data files. NWB internal metadata is outside BIDS's inheritance model.
 - What happens when operating on a dataset on a read-only filesystem?
@@ -231,6 +231,15 @@ A dataset needs to be split — for example, extracting only behavioral data or 
 - Q: How should BIDS-aware completions resolve the dataset root? → A: Honor `--dataset` if provided; otherwise walk up from CWD until `dataset_description.json` is found.
 - Q: Should `bids-utils completion` offer `--install` to modify shell rc files? → A: No; print activation script to stdout only (user handles installation).
 - Q: Which argument types get custom completions initially? → A: Filesystem-derived items (`sub-*`, `ses-*` directories, BIDS file paths) plus entity keys from the schema (`task=`, `run=`, `acq=`, etc.). Entity value discovery deferred.
+
+### Session 2026-04-09
+
+- Q: Where should the `--annexed` option live — per-command or group-level? → A: **Group-level** (`bids-utils --annexed=MODE COMMAND ...`). Every command that reads files is affected (rename reads sidecars, migrate reads JSON, session-rename reads `_scans.tsv`, metadata reads JSON). It's a dataset-level concern, not command-specific. Putting it on the group avoids repeating the option across ~10 commands. The policy flows through `BIDSDataset.annexed_mode` so library users get the same behavior.
+- Q: What modes should `--annexed` support? → A: `error` (default), `get`, `skip-warning`, `skip`. Environment variable `BIDS_UTILS_ANNEXED` for persistent preference.
+- Q: Should `dataset_description.json` reads be guarded by the annex policy? → A: No. This file is essentially never annexed (small JSON tracked in git). Adding annex awareness to `BIDSDataset.from_path()` creates a chicken-and-egg problem since the dataset object doesn't exist yet.
+- Q: Should content fetching be batched? → A: Initial implementation does per-file checks/fetches. Batch optimization (`ensure_content_batch`) can be added later for scan-heavy operations (migrate, metadata audit).
+- Q: What about writing to annexed files? → A: Annexed files in locked mode (symlinks to `.git/annex/objects`) are read-only. Before modification, `unlock(paths)` must be called (`git annex unlock` / `datalad unlock`). After modification, `add(paths)` must be called (`git annex add`) to re-annex the file. The I/O layer provides `ensure_writable()` (unlock) and `mark_modified()` (add) to bracket writes. The full lifecycle for a modify operation on an annexed file is: get → unlock → read → modify → write → add.
+- Q: Should `unlock`/`add` be implicit or require `--annexed=get`? → A: `unlock` and `add` apply whenever the VCS is git-annex/DataLad, regardless of `--annexed` mode. The `--annexed` mode only controls what happens when content is *missing*. If content is present but the file is locked, any write operation must unlock first — this is a VCS-level concern, not a policy choice.
 
 ## Requirements *(mandatory)*
 
@@ -257,6 +266,7 @@ A dataset needs to be split — for example, extracting only behavioral data or 
 - **FR-019**: System MUST provide a `bids-utils completion [SHELL]` subcommand that outputs shell completion activation scripts. When `SHELL` argument is omitted, auto-detect from the `$SHELL` environment variable. Supported shells: Bash, Zsh, Fish (matching Click 8.0+ built-in completion support). Output goes to stdout only (no `--install` flag).
 - **FR-020**: CLI MUST resolve the BIDS dataset root by: (1) using the `--dataset`/`-d` flag if provided, or (2) walking up the directory hierarchy from CWD until `dataset_description.json` is found. This resolution is used both by commands and by shell completion.
 - **FR-021**: Shell completion MUST provide BIDS-aware completions: filesystem-derived items (`sub-*` directories, `ses-*` directories, BIDS file paths) and entity keys from the `bidsschematools` schema (e.g., `task=`, `run=`, `acq=`). Entity value completion (e.g., `task=rest`) is deferred to a later release.
+- **FR-022**: System MUST provide a group-level `--annexed` option controlling behavior when git-annex/DataLad file content is not locally available. Modes: `error` (default — informative error listing missing files and suggesting `--annexed=get` or `git annex get`), `get` (automatically fetch content via `git annex get` / `datalad get` before reading), `skip-warning` (skip files without content with a per-file warning), `skip` (skip silently). The option MUST also be settable via `BIDS_UTILS_ANNEXED` environment variable (CLI flag takes precedence). The VCS backend protocol MUST expose: `has_content(path)` and `get_content(paths)` for reads; `unlock(paths)` to make locked annexed files writable before modification; `add(paths)` to re-annex modified files after writes (restoring them to their original tracked state). All file reads (TSV, JSON sidecars) MUST go through a content-aware I/O layer. All file writes to potentially-annexed files MUST go through an unlock-before/add-after lifecycle managed by the I/O layer.
 
 ### Key Entities
 
@@ -284,7 +294,7 @@ A dataset needs to be split — for example, extracting only behavioral data or 
 - Users have Python 3.10+ installed (aligned with current ecosystem support).
 - `bidsschematools` provides stable, versioned access to the BIDS schema. If its API changes, bids-utils will adapt.
 - The BIDS validator (`bids-validator-deno`) is available for integration testing but is not a runtime dependency.
-- Datasets fit on local disk for direct operations. Remote/annexed access is a separate concern handled via fsspec/git-annex passthrough.
+- Datasets fit on local disk for direct operations. Annexed files without local content are handled via `--annexed` policy (FR-022): error by default, with auto-fetch and skip modes.
 - The initial release focuses on local filesystem operations. Full DataLad integration (provenance via `datalad run`) is a subsequent enhancement.
 - `bids-examples` git repository is available as a submodule or fixture for testing.
 - The project uses `uv` for package management, `tox` + `tox-uv` for test orchestration, `ruff` for linting, `mypy` for type checking, `mkdocs` for documentation — as stated in the constitution.
