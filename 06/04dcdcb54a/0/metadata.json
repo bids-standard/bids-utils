@@ -1,0 +1,45 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "0604dcdcb54a",
+  "session_id": "4fd82c02-1ee6-4b9a-b305-9ee382243440",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-10T00:40:12.541135274Z",
+  "branch": "00-initial-design",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".specify/specs/00-initial-design/tasks.md",
+    "src/bids_utils/cli/__init__.py",
+    "src/bids_utils/cli/_common.py",
+    "src/bids_utils/cli/completion.py",
+    "src/bids_utils/cli/rename.py",
+    "src/bids_utils/cli/session.py",
+    "src/bids_utils/cli/subject.py",
+    "tests/test_cli.py",
+    "tests/test_completion.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-6[1m]",
+  "turn_id": "79b76d068a36",
+  "token_usage": {
+    "input_tokens": 66,
+    "cache_creation_tokens": 222566,
+    "cache_read_tokens": 3083243,
+    "output_tokens": 14904,
+    "api_call_count": 58
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-10T00:40:11.224459784Z",
+    "agent_lines": 467,
+    "agent_removed": 10,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 467,
+    "total_lines_changed": 477,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}
