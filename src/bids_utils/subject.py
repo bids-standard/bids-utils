@@ -104,8 +104,9 @@ def rename_subject(
                 vcs.move(f, new_path)
 
     # Update scans.tsv files (they're now under new_dir)
+    amode = dataset.annexed_mode
     for scans_file in sorted(new_dir.rglob("*_scans.tsv")):
-        rows = read_scans_tsv(scans_file)
+        rows = read_scans_tsv(scans_file, vcs=vcs, annexed_mode=amode)
         modified = False
         for row in rows:
             fn = row.get("filename", "")
@@ -113,11 +114,13 @@ def rename_subject(
                 row["filename"] = fn.replace(old_id, new_id)
                 modified = True
         if modified:
-            write_scans_tsv(scans_file, rows)
+            write_scans_tsv(scans_file, rows, vcs=vcs)
 
     # Update participants.tsv
     if participants.is_file():
-        rename_participant(participants, old_id, new_id)
+        rename_participant(
+            participants, old_id, new_id, vcs=vcs, annexed_mode=amode
+        )
 
     # Handle sourcedata if requested
     if include_sourcedata:
@@ -166,6 +169,8 @@ def remove_subject(
     vcs.remove(sub_dir)
 
     if participants.is_file():
-        remove_participant(participants, sub_id)
+        remove_participant(
+            participants, sub_id, vcs=vcs, annexed_mode=dataset.annexed_mode
+        )
 
     return result

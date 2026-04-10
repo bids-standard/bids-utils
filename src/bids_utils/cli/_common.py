@@ -14,7 +14,7 @@ import click
 from click.shell_completion import CompletionItem
 
 from bids_utils._dataset import BIDSDataset
-from bids_utils._types import OperationResult
+from bids_utils._types import AnnexedMode, OperationResult
 
 
 def common_options(f: Callable[..., Any]) -> Callable[..., Any]:
@@ -45,16 +45,26 @@ def common_options(f: Callable[..., Any]) -> Callable[..., Any]:
 def load_dataset(path: Path | None = None) -> BIDSDataset:
     """Load a BIDSDataset, exiting on error.
 
+    Reads the ``--annexed`` mode from the Click context (set by the
+    group-level option) and applies it to the dataset.
+
     Parameters
     ----------
     path
         Path to (or inside) the dataset.  Defaults to ``Path.cwd()``.
     """
     try:
-        return BIDSDataset.from_path(path or Path.cwd())
+        ds = BIDSDataset.from_path(path or Path.cwd())
     except (FileNotFoundError, ValueError) as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
+
+    # Apply --annexed mode from CLI group context
+    ctx = click.get_current_context(silent=True)
+    if ctx is not None and ctx.obj and "annexed" in ctx.obj:
+        ds.annexed_mode = AnnexedMode(ctx.obj["annexed"])
+
+    return ds
 
 
 def output_result(

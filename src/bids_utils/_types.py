@@ -4,8 +4,29 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Literal
+
+
+class AnnexedMode(Enum):
+    """Policy for handling git-annex files without local content."""
+
+    ERROR = "error"
+    GET = "get"
+    SKIP_WARNING = "skip-warning"
+    SKIP = "skip"
+
+
+class ContentNotAvailableError(FileNotFoundError):
+    """Raised when annexed file content is not locally available."""
+
+    def __init__(self, path: Path, hint: str = "") -> None:
+        self.path = path
+        msg = f"Content not available for annexed file: {path}"
+        if hint:
+            msg += f"\n{hint}"
+        super().__init__(msg)
 
 
 @dataclass(frozen=True)

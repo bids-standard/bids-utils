@@ -61,21 +61,21 @@
 
 ### Foundation
 
-- [ ] T086 Add `AnnexedMode` enum (`error`, `get`, `skip-warning`, `skip`) and `ContentNotAvailableError` exception to `src/bids_utils/_types.py`. Add `annexed_mode: AnnexedMode` field to `BIDSDataset` in `src/bids_utils/_dataset.py` (default: `AnnexedMode.ERROR`).
-- [ ] T087 Extend `VCSBackend` protocol in `src/bids_utils/_vcs.py` with four new methods: `has_content(path: Path) -> bool`, `get_content(paths: list[Path]) -> None` for reads; `unlock(paths: list[Path]) -> None`, `add(paths: list[Path]) -> None` for writes. Implement for all backends: `NoVCS` all no-op/True; `Git` has_content=True, unlock=no-op, add=`git add`; `GitAnnex` checks symlink target, runs `git annex get/unlock/add`; `DataLad` uses `datalad get/unlock`, `git annex add`.
+- [X] T086 Add `AnnexedMode` enum (`error`, `get`, `skip-warning`, `skip`) and `ContentNotAvailableError` exception to `src/bids_utils/_types.py`. Add `annexed_mode: AnnexedMode` field to `BIDSDataset` in `src/bids_utils/_dataset.py` (default: `AnnexedMode.ERROR`).
+- [X] T087 Extend `VCSBackend` protocol in `src/bids_utils/_vcs.py` with four new methods: `has_content(path: Path) -> bool`, `get_content(paths: list[Path]) -> None` for reads; `unlock(paths: list[Path]) -> None`, `add(paths: list[Path]) -> None` for writes. Implement for all backends: `NoVCS` all no-op/True; `Git` has_content=True, unlock=no-op, add=`git add`; `GitAnnex` checks symlink target, runs `git annex get/unlock/add`; `DataLad` uses `datalad get/unlock`, `git annex add`.
 
 ### Content-aware I/O layer
 
-- [ ] T088 Create `src/bids_utils/_io.py` with: `ensure_content(path, vcs, annexed_mode)` enforcing `--annexed` policy for reads; `ensure_writable(path, vcs)` calling `vcs.unlock()` for locked annexed files before writes (always, independent of `--annexed` mode); `mark_modified(paths, vcs)` calling `vcs.add()` after writes to re-annex; `read_json(path, vcs, mode) -> dict | None` and `write_json(path, data, vcs)` helpers.
-- [ ] T089 Wire content-aware I/O through existing code: update `_tsv.read_tsv`/`write_tsv` to accept optional `vcs`/`annexed_mode` params; update callers in `_scans.py`, `_participants.py`, `session.py`, `subject.py`, `rename.py` to pass `dataset.vcs`/`dataset.annexed_mode`. Replace inline `json.loads(f.read_text())` in `metadata.py` and `migrate.py` with `_io.read_json()`. Replace inline `f.write_text(json.dumps(...))` with `_io.write_json()` (which brackets with ensure_writable/mark_modified).
+- [X] T088 Create `src/bids_utils/_io.py` with: `ensure_content(path, vcs, annexed_mode)` enforcing `--annexed` policy for reads; `ensure_writable(path, vcs)` calling `vcs.unlock()` for locked annexed files before writes (always, independent of `--annexed` mode); `mark_modified(paths, vcs)` calling `vcs.add()` after writes to re-annex; `read_json(path, vcs, mode) -> dict | None` and `write_json(path, data, vcs)` helpers.
+- [X] T089 Wire content-aware I/O through existing code: update `_tsv.read_tsv`/`write_tsv` to accept optional `vcs`/`annexed_mode` params; update callers in `_scans.py`, `_participants.py`, `session.py`, `subject.py`, `rename.py` to pass `dataset.vcs`/`dataset.annexed_mode`. Replace inline `json.loads(f.read_text())` in `metadata.py` and `migrate.py` with `_io.read_json()`. Replace inline `f.write_text(json.dumps(...))` with `_io.write_json()` (which brackets with ensure_writable/mark_modified).
 
 ### CLI wiring
 
-- [ ] T090 Add `--annexed` option to CLI group in `src/bids_utils/cli/__init__.py` (with `envvar="BIDS_UTILS_ANNEXED"`). Update `load_dataset()` in `_common.py` to set `annexed_mode` on the returned `BIDSDataset` from Click context. All existing subcommands inherit automatically.
+- [X] T090 Add `--annexed` option to CLI group in `src/bids_utils/cli/__init__.py` (with `envvar="BIDS_UTILS_ANNEXED"`). Update `load_dataset()` in `_common.py` to set `annexed_mode` on the returned `BIDSDataset` from Click context. All existing subcommands inherit automatically.
 
 ### Tests
 
-- [ ] T091 Write tests: `tests/test_io.py` for `ensure_content`/`ensure_writable`/`mark_modified`/`read_json`/`write_json` with all four annexed modes using mock VCS; `tests/test_vcs.py` additions for `has_content`/`get_content`/`unlock`/`add` on all backends; `tests/test_cli_common.py` additions for `--annexed` group option flow and env var; integration test with actual git-annex repo (locked files: read requires get+unlock, write unlocks then re-adds).
+- [X] T091 Write tests: `tests/test_io.py` for `ensure_content`/`ensure_writable`/`mark_modified`/`read_json`/`write_json` with all four annexed modes using mock VCS; `tests/test_vcs.py` additions for `has_content`/`get_content`/`unlock`/`add` on all backends; `tests/test_cli_common.py` additions for `--annexed` group option flow and env var; integration test with actual git-annex repo (locked files: read requires get+unlock, write unlocks then re-adds).
 
 **Checkpoint**: `bids-utils --annexed=get session-rename` works on a git-annex dataset — content is fetched, locked files are unlocked for modification, and re-annexed after writes. All existing tests still pass. `--annexed=error` gives an informative error pointing to `--annexed=get`.
 

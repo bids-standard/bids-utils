@@ -152,7 +152,13 @@ def rename_file(
 
     # Update _scans.tsv
     if scans_path is not None and old_rel and new_rel:
-        update_scans_entry(scans_path, old_rel, new_rel)
+        update_scans_entry(
+            scans_path,
+            old_rel,
+            new_rel,
+            vcs=dataset.vcs,
+            annexed_mode=dataset.annexed_mode,
+        )
 
     return result
 

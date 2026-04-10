@@ -41,6 +41,7 @@ def rename_session(
         )
 
     vcs = dataset.vcs
+    amode = dataset.annexed_mode
 
     for sub_dir in sub_dirs:
         if not sub_dir.is_dir():
@@ -92,7 +93,9 @@ def rename_session(
 
             # Update scans.tsv
             for scans_file in new_ses_dir.rglob("*_scans.tsv"):
-                rows = read_scans_tsv(scans_file)
+                rows = read_scans_tsv(
+                    scans_file, vcs=vcs, annexed_mode=amode
+                )
                 modified = False
                 for row in rows:
                     fn = row.get("filename", "")
@@ -100,7 +103,7 @@ def rename_session(
                         row["filename"] = fn.replace(old_label, new_label)
                         modified = True
                 if modified:
-                    write_scans_tsv(scans_file, rows)
+                    write_scans_tsv(scans_file, rows, vcs=vcs)
 
         else:
             # Move into session: no existing session, introduce new one
@@ -160,7 +163,9 @@ def rename_session(
                 new_scans = new_ses_dir / f"{sub_name}_{new_ses_label}_scans.tsv"
                 vcs.move(sub_scans, new_scans)
                 # Update entries in scans.tsv
-                rows = read_scans_tsv(new_scans)
+                rows = read_scans_tsv(
+                    new_scans, vcs=vcs, annexed_mode=amode
+                )
                 for row in rows:
                     fn = row.get("filename", "")
                     if sub_name in fn and new_ses_label not in fn:
@@ -172,6 +177,6 @@ def rename_session(
                                 f"{sub_name}_", f"{sub_name}_{new_ses_label}_"
                             )
                             row["filename"] = f"{datatype}/{new_fname}"
-                write_scans_tsv(new_scans, rows)
+                write_scans_tsv(new_scans, rows, vcs=vcs)
 
     return result
