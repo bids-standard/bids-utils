@@ -250,6 +250,13 @@ A dataset needs to be split — for example, extracting only behavioral data or 
 - **RULE**: In git-annex codepaths, NEVER use `Path.resolve()` on files that may be symlinks. Use `Path.absolute()` instead. NEVER use bare `Path.exists()` when the file might be an annexed symlink — use `path.exists() or path.is_symlink()`.
 - Q: Why didn't the `bids-examples` integration tests catch the symlink bug? → A: `bids-examples` datasets contain regular files, not annexed symlinks. Integration tests need a fixture that creates a git-annex repo with locked (symlinked) files to exercise this path. Add a `tmp_annex_dataset` fixture.
 
+### Session 2026-04-10 (testing)
+
+- **PROBLEM**: Most bids-examples integration tests run in dry-run mode only. Dry-run tests verify the code doesn't crash but do NOT verify the operation produces correct results (SC-001 requires datasets remain valid after operations). Dry-run testing is necessary but insufficient.
+- Q: What should the integration test pattern be? → A: Copy dataset to tmp_path, run mutating operation, validate result. For validation: (1) structural checks (file counts, no stale references), (2) `bids-validator-deno` before+after (skip if validator not installed). The existing `_copy_dataset` helper + `git reset --hard; git clean -dfx` for annexed clones.
+- Q: Should `bids-validator-deno` be a test dependency? → A: Yes, add to `[project.optional-dependencies] test`. Skip validator tests if not installed (graceful degradation). The validator is the authoritative check for SC-001.
+- Q: How to reset bids-examples after mutation? → A: Don't mutate bids-examples in-place. Always `shutil.copytree` to `tmp_path` first, then mutate the copy. For git-annex mode, copy + `git annex init` + force annex.
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements

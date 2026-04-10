@@ -16,6 +16,63 @@ def _has_bids_examples() -> bool:
     return BIDS_EXAMPLES_DIR.is_dir() and (BIDS_EXAMPLES_DIR / "README.md").exists()
 
 
+def _has_bids_validator() -> bool:
+    return shutil.which("bids-validator-deno") is not None
+
+
+requires_bids_validator = pytest.mark.skipif(
+    not _has_bids_validator(),
+    reason="bids-validator-deno not installed",
+)
+
+
+def validate_dataset(ds_path: Path) -> tuple[bool, list[dict]]:
+    """Run bids-validator-deno on a dataset.
+
+    Returns ``(valid, errors)`` where *errors* is the list of error-severity
+    issues.  Uses ``--ignoreNiftiHeaders`` because bids-examples ships stub
+    NIfTI files.
+
+    Raises ``FileNotFoundError`` if ``bids-validator-deno`` is not installed.
+    """
+    if not _has_bids_validator():
+        raise FileNotFoundError("bids-validator-deno not installed")
+
+    result = subprocess.run(
+        [
+            "bids-validator-deno",
+            str(ds_path),
+            "--format",
+            "json",
+            "--ignoreNiftiHeaders",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return False, [
+            {
+                "code": "VALIDATOR_PARSE_ERROR",
+                "message": result.stderr[:500],
+            }
+        ]
+
+    # v2 validator: issues.issues is a flat list with "severity" field
+    all_issues = data.get("issues", {}).get("issues", [])
+    # Filter: errors only, ignore EMPTY_FILE and NIFTI issues (bids-examples
+    # ships stub/zero-byte data files that are expected to fail these checks)
+    ignorable = {"EMPTY_FILE", "NIFTI_HEADER_UNREADABLE", "NIFTI_UNIT"}
+    errors = [
+        i
+        for i in all_issues
+        if i.get("severity") == "error" and i.get("code") not in ignorable
+    ]
+    return len(errors) == 0, errors
+
+
 requires_bids_examples = pytest.mark.skipif(
     not _has_bids_examples(),
     reason="bids-examples submodule not available",

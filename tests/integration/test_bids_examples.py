@@ -24,7 +24,9 @@ from bids_utils.subject import remove_subject, rename_subject
 from tests.conftest import (
     BIDS_EXAMPLES_DIR,
     requires_bids_examples,
+    requires_bids_validator,
     requires_git_annex,
+    validate_dataset,
 )
 
 
@@ -36,6 +38,7 @@ def _iter_datasets() -> list[Path]:
     for d in sorted(BIDS_EXAMPLES_DIR.iterdir()):
         if d.is_dir() and (d / "dataset_description.json").is_file():
             datasets.append(d)
+    print("DATASETS: ", datasets)
     return datasets
 
 
@@ -509,6 +512,222 @@ class TestMergeSweep:
         assert result.dry_run
         assert result.success, (
             f"Dry-run single-dataset merge failed for {ds_name}: {result.errors}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Mutating + bids-validator integration tests (SC-001)
+#
+# Verify that datasets valid before an operation remain valid after it.
+# ---------------------------------------------------------------------------
+
+
+@requires_bids_examples
+@requires_bids_validator
+@pytest.mark.integration
+class TestRenameMutatingValidated:
+    """Rename one file in each dataset copy, validate before and after."""
+
+    @pytest.mark.ai_generated
+    @pytest.mark.parametrize("ds_name", _dataset_ids())
+    def test_rename_validated(self, ds_name: str, tmp_path: Path) -> None:
+        ds_copy = _copy_dataset(BIDS_EXAMPLES_DIR / ds_name, tmp_path)
+
+        try:
+            ds = BIDSDataset.from_path(ds_copy)
+        except (FileNotFoundError, ValueError) as exc:
+            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+
+        target = _find_renameable_file(ds_copy)
+        if target is None:
+            pytest.skip(reason=f"no renameable BIDS data file in {ds_name}")
+
+        valid_before, errors_before = validate_dataset(ds_copy)
+        if not valid_before:
+            pytest.skip(
+                f"dataset {ds_name} not valid before operation: {errors_before}"
+            )
+
+        before_files = {
+            f.relative_to(ds_copy) for f in ds_copy.rglob("*") if f.is_file()
+        }
+
+        result = rename_file(ds, target, set_entities={"run": "99"})
+        assert result.success, f"Rename failed in {ds_name}: {result.errors}"
+
+        after_files = {
+            f.relative_to(ds_copy) for f in ds_copy.rglob("*") if f.is_file()
+        }
+        assert len(after_files) == len(before_files), (
+            f"File count changed: {len(before_files)} -> {len(after_files)}"
+        )
+
+        valid_after, errors_after = validate_dataset(ds_copy)
+        assert valid_after, (
+            f"Dataset {ds_name} invalid after rename: {errors_after}"
+        )
+
+
+@requires_bids_examples
+@requires_bids_validator
+@pytest.mark.integration
+class TestSubjectRenameMutatingValidated:
+    """Rename first subject in each dataset copy, validate before and after."""
+
+    @pytest.mark.ai_generated
+    @pytest.mark.parametrize("ds_name", _dataset_ids())
+    def test_subject_rename_validated(
+        self, ds_name: str, tmp_path: Path
+    ) -> None:
+        ds_copy = _copy_dataset(BIDS_EXAMPLES_DIR / ds_name, tmp_path)
+
+        try:
+            ds = BIDSDataset.from_path(ds_copy)
+        except (FileNotFoundError, ValueError) as exc:
+            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+
+        sub_dirs = sorted(
+            d
+            for d in ds_copy.iterdir()
+            if d.is_dir() and d.name.startswith("sub-")
+        )
+        if not sub_dirs:
+            pytest.skip(reason=f"no sub-* directories in {ds_name}")
+
+        old_sub = sub_dirs[0].name
+
+        valid_before, errors_before = validate_dataset(ds_copy)
+        if not valid_before:
+            pytest.skip(
+                f"dataset {ds_name} not valid before operation: {errors_before}"
+            )
+
+        result = rename_subject(ds, old_sub, "sub-TESTZZ")
+        assert result.success, (
+            f"Subject rename failed in {ds_name}: {result.errors}"
+        )
+
+        # Old dir should be gone, new dir should exist
+        assert not (ds_copy / old_sub).exists(), (
+            f"Old subject dir {old_sub} still present"
+        )
+        assert (ds_copy / "sub-TESTZZ").is_dir(), (
+            "New subject dir sub-TESTZZ not found"
+        )
+
+        # No files should retain the old subject label
+        for f in (ds_copy / "sub-TESTZZ").rglob("*"):
+            if f.is_dir():
+                continue
+            assert old_sub not in f.name, (
+                f"File retains old subject label: {f.name}"
+            )
+
+        valid_after, errors_after = validate_dataset(ds_copy)
+        assert valid_after, (
+            f"Dataset {ds_name} invalid after subject rename: {errors_after}"
+        )
+
+
+@requires_bids_examples
+@requires_bids_validator
+@pytest.mark.integration
+class TestSessionRenameMutatingValidated:
+    """Rename first session in session-datasets, validate before and after."""
+
+    @pytest.mark.ai_generated
+    @pytest.mark.parametrize("ds_name", _find_session_dataset_ids())
+    def test_session_rename_validated(
+        self, ds_name: str, tmp_path: Path
+    ) -> None:
+        ds_copy = _copy_dataset(BIDS_EXAMPLES_DIR / ds_name, tmp_path)
+
+        try:
+            ds = BIDSDataset.from_path(ds_copy)
+        except (FileNotFoundError, ValueError) as exc:
+            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+
+        # Find first session in first subject
+        old_label: str | None = None
+        first_sub_dir: Path | None = None
+        for sub_dir in sorted(ds_copy.iterdir()):
+            if not sub_dir.is_dir() or not sub_dir.name.startswith("sub-"):
+                continue
+            for child in sorted(sub_dir.iterdir()):
+                if child.is_dir() and child.name.startswith("ses-"):
+                    old_label = child.name.removeprefix("ses-")
+                    first_sub_dir = sub_dir
+                    break
+            if old_label is not None:
+                break
+
+        if old_label is None:
+            pytest.skip(reason=f"no ses-* directory in {ds_name}")
+
+        valid_before, errors_before = validate_dataset(ds_copy)
+        if not valid_before:
+            pytest.skip(
+                f"dataset {ds_name} not valid before operation: {errors_before}"
+            )
+
+        result = rename_session(ds, old_label, "TESTZZ99")
+        assert result.success, (
+            f"Session rename failed in {ds_name}: {result.errors}"
+        )
+
+        # Old session dir should be gone under the first subject
+        assert first_sub_dir is not None
+        assert not (first_sub_dir / f"ses-{old_label}").exists(), (
+            f"Old session dir ses-{old_label} still present"
+        )
+        assert (first_sub_dir / "ses-TESTZZ99").is_dir(), (
+            "New session dir ses-TESTZZ99 not found"
+        )
+
+        # No files should retain the old session label under new session dir
+        for f in (first_sub_dir / "ses-TESTZZ99").rglob("*"):
+            if f.is_dir():
+                continue
+            assert f"ses-{old_label}" not in f.name, (
+                f"File retains old session label: {f.name}"
+            )
+
+        valid_after, errors_after = validate_dataset(ds_copy)
+        assert valid_after, (
+            f"Dataset {ds_name} invalid after session rename: {errors_after}"
+        )
+
+
+@requires_bids_examples
+@requires_bids_validator
+@pytest.mark.integration
+class TestMigrateMutatingValidated:
+    """Run migrate on each dataset copy, validate afterwards."""
+
+    @pytest.mark.ai_generated
+    @pytest.mark.parametrize("ds_name", _dataset_ids())
+    def test_migrate_validated(self, ds_name: str, tmp_path: Path) -> None:
+        ds_copy = _copy_dataset(BIDS_EXAMPLES_DIR / ds_name, tmp_path)
+
+        try:
+            ds = BIDSDataset.from_path(ds_copy)
+        except (FileNotFoundError, ValueError) as exc:
+            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+
+        valid_before, errors_before = validate_dataset(ds_copy)
+        if not valid_before:
+            pytest.skip(
+                f"dataset {ds_name} not valid before operation: {errors_before}"
+            )
+
+        result = migrate_dataset(ds)
+        assert result.success, (
+            f"Migration failed in {ds_name}: {result.errors}"
+        )
+
+        valid_after, errors_after = validate_dataset(ds_copy)
+        assert valid_after, (
+            f"Dataset {ds_name} invalid after migration: {errors_after}"
         )
 
 
