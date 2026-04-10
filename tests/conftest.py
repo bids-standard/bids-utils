@@ -79,6 +79,53 @@ requires_bids_examples = pytest.mark.skipif(
 )
 
 
+# Cache of dataset names that pass bids-validator (computed once per session).
+_VALID_DATASETS: list[str] | None = None
+
+
+def validated_dataset_ids() -> list[str]:
+    """Return bids-examples dataset names that pass bids-validator.
+
+    Results are cached across the entire test session.  Datasets that
+    fail validation (or have no ``dataset_description.json``) are
+    excluded — they would cause every mutating test to skip anyway.
+    """
+    global _VALID_DATASETS  # noqa: PLW0603
+    if _VALID_DATASETS is not None:
+        return _VALID_DATASETS
+
+    if not _has_bids_examples() or not _has_bids_validator():
+        _VALID_DATASETS = []
+        return _VALID_DATASETS
+
+    valid: list[str] = []
+    for d in sorted(BIDS_EXAMPLES_DIR.iterdir()):
+        if not d.is_dir() or not (d / "dataset_description.json").is_file():
+            continue
+        ok, _ = validate_dataset(d)
+        if ok:
+            valid.append(d.name)
+    _VALID_DATASETS = valid
+    return _VALID_DATASETS
+
+
+def validated_session_dataset_ids() -> list[str]:
+    """Subset of ``validated_dataset_ids`` that contain ``ses-*`` dirs."""
+    ids: list[str] = []
+    for name in validated_dataset_ids():
+        ds = BIDS_EXAMPLES_DIR / name
+        for sub in ds.iterdir():
+            if not sub.is_dir() or not sub.name.startswith("sub-"):
+                continue
+            if any(
+                c.is_dir() and c.name.startswith("ses-")
+                for c in sub.iterdir()
+            ):
+                ids.append(name)
+                break
+    return ids
+
+
 @pytest.fixture
 def bids_examples_path() -> Path:
     """Return path to the bids-examples submodule."""
