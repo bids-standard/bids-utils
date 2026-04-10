@@ -54,7 +54,7 @@ def rename_file(
     if not file_path.is_absolute():
         file_path = dataset.root / file_path
 
-    if not file_path.exists():
+    if not file_path.exists() and not file_path.is_symlink():
         result.success = False
         result.errors.append(f"File not found: {file_path}")
         return result
@@ -87,7 +87,7 @@ def rename_file(
         return result
 
     # Check for conflicts
-    if new_file_path.exists():
+    if new_file_path.exists() or new_file_path.is_symlink():
         result.success = False
         result.errors.append(f"Target already exists: {new_file_path}")
         return result
@@ -103,7 +103,10 @@ def rename_file(
         new_sidecar_name = new_stem + _get_extension(sidecar.name)
         new_sidecar_path = sidecar.parent / new_sidecar_name
 
-        if new_sidecar_path.exists() and new_sidecar_path != sidecar:
+        target_exists = (
+            new_sidecar_path.exists() or new_sidecar_path.is_symlink()
+        )
+        if target_exists and new_sidecar_path != sidecar:
             result.success = False
             result.errors.append(f"Sidecar target already exists: {new_sidecar_path}")
             return result

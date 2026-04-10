@@ -53,7 +53,7 @@ def rename(
     schema_version: str | None,
 ) -> None:
     """Rename a BIDS file and all its sidecars."""
-    file_path = Path(file).resolve()
+    file_path = Path(file).absolute()
 
     dataset = load_dataset(file_path)
 
