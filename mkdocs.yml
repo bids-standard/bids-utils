@@ -1,0 +1,22 @@
+site_name: bids-utils
+site_description: CLI and Python library for manipulating BIDS datasets
+site_url: https://bids-standard.github.io/bids-utils/
+repo_url: https://github.com/bids-standard/bids-utils
+repo_name: bids-standard/bids-utils
+
+theme:
+  name: material
+  palette:
+    primary: blue
+    accent: light blue
+
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - CLI Reference: cli.md
+  - API Reference: api.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences

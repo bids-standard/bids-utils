@@ -1,0 +1,6 @@
+{
+  "plugins": ["git-tag", "conventional-commits"],
+  "owner": "bids-standard",
+  "repo": "bids-utils",
+  "name": "bids-utils"
+}
