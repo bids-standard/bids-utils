@@ -1,0 +1,42 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "902a7cfc1d2a",
+  "session_id": "4fd82c02-1ee6-4b9a-b305-9ee382243440",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-10T01:57:44.927189325Z",
+  "branch": "00-initial-design",
+  "checkpoints_count": 3,
+  "files_touched": [
+    ".specify/specs/00-initial-design.md",
+    ".specify/specs/00-initial-design/contracts/library-api.md",
+    ".specify/specs/00-initial-design/plan.md",
+    ".specify/specs/00-initial-design/tasks.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-6[1m]",
+  "turn_id": "e7f65c1236a0",
+  "checkpoint_transcript_start": 206,
+  "transcript_lines_at_start": 206,
+  "token_usage": {
+    "input_tokens": 52,
+    "cache_creation_tokens": 145749,
+    "cache_read_tokens": 4518604,
+    "output_tokens": 15319,
+    "api_call_count": 45
+  },
+  "session_metrics": {
+    "turn_count": 5
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-10T01:57:40.229584696Z",
+    "agent_lines": 115,
+    "agent_removed": 3,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 115,
+    "total_lines_changed": 118,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}

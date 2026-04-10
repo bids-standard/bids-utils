@@ -1,0 +1,50 @@
+in which stage we have plans for git-annex integration?  Since when I try to e.g. rename session we already run into the problem that _scans.tsv needs to be fetched:
+
+❯ bids-utils session-rename ses-20230705 ses-202307XX
+Traceback (most recent call last):
+  File "/home/yoh/proj/bids/bids-utils/.venv/bin/bids-utils", line 10, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/home/yoh/proj/bids/bids-utils/.venv/lib/python3.13/site-packages/click/core.py", line 1485, in __call__
+    return self.main(*args, **kwargs)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/yoh/proj/bids/bids-utils/.venv/lib/python3.13/site-packages/click/core.py", line 1406, in main
+    rv = self.invoke(ctx)
+  File "/home/yoh/proj/bids/bids-utils/.venv/lib/python3.13/site-packages/click/core.py", line 1873, in invoke
+    return _process_result(sub_ctx.command.invoke(sub_ctx))
+                           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/home/yoh/proj/bids/bids-utils/.venv/lib/python3.13/site-packages/click/core.py", line 1269, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yoh/proj/bids/bids-utils/.venv/lib/python3.13/site-packages/click/core.py", line 824, in invoke
+    return callback(*args, **kwargs)
+  File "/home/yoh/proj/bids/bids-utils/src/bids_utils/cli/_common.py", line 40, in wrapper
+    return f(**kwargs)
+  File "/home/yoh/proj/bids/bids-utils/src/bids_utils/cli/session.py", line 36, in session_rename_cmd
+    result = rename_session(dataset, old, new, subject=subject, dry_run=dry_run)
+  File "/home/yoh/proj/bids/bids-utils/src/bids_utils/session.py", line 95, in rename_session
+    rows = read_scans_tsv(scans_file)
+  File "/home/yoh/proj/bids/bids-utils/src/bids_utils/_scans.py", line 12, in read_scans_tsv
+    return read_tsv(path)
+  File "/home/yoh/proj/bids/bids-utils/src/bids_utils/_tsv.py", line 12, in read_tsv
+    text = path.read_text(encoding="utf-8")
+  File "/usr/lib/python3.13/pathlib/_local.py", line 548, in read_text
+    return PathBase.read_text(self, encoding, errors, newline)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/pathlib/_abc.py", line 632, in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:
+         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/pathlib/_local.py", line 539, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/yoh/datalad/dbic/QA/sub-qa/ses-202307XX/sub-qa_ses-20230705_scans.tsv'
+❯ ls -ld /home/yoh/datalad/dbic/QA/sub-qa/ses-202307XX/sub-qa_ses-20230705_scans.tsv
+lrwxrwxrwx 1 yoh yoh 196 Jul 22  2023 /home/yoh/datalad/dbic/QA/sub-qa/ses-202307XX/sub-qa_ses-20230705_scans.tsv -> ../../.git/annex/objects/j2/zX/SHA256E-s673--47d43364d7a13d40161c35bd92383f2097f96b7d8858f88224d5128749acdf9f.tsv/SHA256E-s673--47d43364d7a13d40161c35bd92383f2097f96b7d8858f88224d5128749acdf9f.tsv
+
+---
+
+adjust specification with the need for a global option on how to deal with annex'ed content when is needed, e.g. `--annexed=error,get,skip-warning,skip`, so by default we would just error (but nicely and informatively), and then I could use  `bids-utils --annexed get session-rename ses-20230705 ses-202307XX` . Or would you recommend placement per operation (then should have common definition at least reused across commands) and other options?  plan for it
+
+---
+
+there should also be abstraction for 'ensure_writable' or alike which would unlock file if it is in annex locked (symlink to .git/annex/objects) mode.  Also at vcs level I guess we might want to orchestrate 'annex add' after modifications to bring it back into "original state".
