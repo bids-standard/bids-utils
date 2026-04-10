@@ -7,11 +7,13 @@ Run with: pytest tests/integration/ -m integration
 from __future__ import annotations
 
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from bids_utils._dataset import BIDSDataset
+from bids_utils._types import AnnexedMode
 from bids_utils.merge import merge_datasets
 from bids_utils.metadata import aggregate_metadata, audit_metadata, segregate_metadata
 from bids_utils.migrate import migrate_dataset
@@ -19,7 +21,11 @@ from bids_utils.rename import rename_file
 from bids_utils.run import remove_run
 from bids_utils.session import rename_session
 from bids_utils.subject import remove_subject, rename_subject
-from tests.conftest import BIDS_EXAMPLES_DIR, requires_bids_examples
+from tests.conftest import (
+    BIDS_EXAMPLES_DIR,
+    requires_bids_examples,
+    requires_git_annex,
+)
 
 
 def _iter_datasets() -> list[Path]:
@@ -365,7 +371,7 @@ def _find_run_file(ds_path: Path) -> tuple[str, str] | None:
     import re
 
     for f in sorted(ds_path.rglob("sub-*_*run-*_*")):
-        if not f.is_file():
+        if f.is_dir():
             continue
         m_sub = re.search(r"(sub-[^_/]+)", f.name)
         m_run = re.search(r"(run-\d+)", f.name)
@@ -504,3 +510,198 @@ class TestMergeSweep:
         assert result.success, (
             f"Dry-run single-dataset merge failed for {ds_name}: {result.errors}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Git-annex mode: clone datasets, force all files into annex, run operations
+# ---------------------------------------------------------------------------
+
+
+def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+
+def _annexify_dataset(src: Path, tmp_path: Path) -> Path:
+    """Copy a dataset, init git-annex, force ALL files into annex."""
+    dst = tmp_path / src.name
+    shutil.copytree(src, dst)
+
+    _git(dst, "init")
+    _git(dst, "config", "user.email", "test@test.com")
+    _git(dst, "config", "user.name", "Test")
+    _git(dst, "annex", "init", "test")
+    # Force all files into annex (including .json, .tsv)
+    _git(dst, "config", "annex.largefiles", "anything")
+    _git(dst, "annex", "add", ".")
+    _git(dst, "add", ".")
+    _git(dst, "commit", "-m", "init annexed")
+
+    return dst
+
+
+def _annex_dataset_ids() -> list[str]:
+    """Subset of datasets for annex testing (representative, not exhaustive)."""
+    all_ids = _dataset_ids()
+    # Pick datasets with different modalities for coverage
+    wanted = {
+        "ds001",  # basic fMRI
+        "synthetic",  # multi-subject multi-session
+        "7t_trt",  # multi-session MRI
+        "eeg_matchingpennies",  # EEG
+        "ieeg_visual",  # iEEG
+    }
+    # Use what's available
+    ids = [d for d in all_ids if d in wanted]
+    # If none of the wanted are available, pick up to 5 from what exists
+    if not ids:
+        ids = all_ids[:5]
+    return ids
+
+
+@requires_bids_examples
+@requires_git_annex
+@pytest.mark.integration
+class TestAnnexRenameSweep:
+    """Rename a file in annexed datasets — verify symlinks handled."""
+
+    @pytest.mark.ai_generated
+    @pytest.mark.parametrize("ds_name", _annex_dataset_ids())
+    def test_rename_dry_run_annex(
+        self, ds_name: str, tmp_path: Path
+    ) -> None:
+        src = BIDS_EXAMPLES_DIR / ds_name
+        ds_path = _annexify_dataset(src, tmp_path)
+        ds = BIDSDataset.from_path(ds_path)
+        ds.annexed_mode = AnnexedMode.SKIP
+
+        target = _find_renameable_file(ds_path)
+        if target is None:
+            pytest.skip(f"no renameable file in {ds_name}")
+
+        result = rename_file(
+            ds, target, set_entities={"run": "99"}, dry_run=True
+        )
+        assert result.success, (
+            f"Annex dry-run rename failed in {ds_name}: {result.errors}"
+        )
+
+    @pytest.mark.ai_generated
+    @pytest.mark.parametrize("ds_name", _annex_dataset_ids())
+    def test_rename_mutating_annex(
+        self, ds_name: str, tmp_path: Path
+    ) -> None:
+        """Actually rename a file in an annexed dataset."""
+        src = BIDS_EXAMPLES_DIR / ds_name
+        ds_path = _annexify_dataset(src, tmp_path)
+        ds = BIDSDataset.from_path(ds_path)
+        ds.annexed_mode = AnnexedMode.SKIP
+
+        target = _find_renameable_file(ds_path)
+        if target is None:
+            pytest.skip(f"no renameable file in {ds_name}")
+
+        result = rename_file(
+            ds, target, set_entities={"run": "99"}
+        )
+        assert result.success, (
+            f"Annex rename failed in {ds_name}: {result.errors}"
+        )
+        # Original file should be gone
+        assert not target.exists() and not target.is_symlink()
+
+
+@requires_bids_examples
+@requires_git_annex
+@pytest.mark.integration
+class TestAnnexSubjectRenameSweep:
+    """Subject rename on annexed datasets."""
+
+    @pytest.mark.ai_generated
+    @pytest.mark.parametrize("ds_name", _annex_dataset_ids())
+    def test_subject_rename_annex(
+        self, ds_name: str, tmp_path: Path
+    ) -> None:
+        src = BIDS_EXAMPLES_DIR / ds_name
+        ds_path = _annexify_dataset(src, tmp_path)
+        ds = BIDSDataset.from_path(ds_path)
+        ds.annexed_mode = AnnexedMode.SKIP
+
+        sub_dirs = sorted(
+            d
+            for d in ds_path.iterdir()
+            if d.is_dir() and d.name.startswith("sub-")
+        )
+        if not sub_dirs:
+            pytest.skip(f"no subjects in {ds_name}")
+
+        old_sub = sub_dirs[0].name
+        result = rename_subject(ds, old_sub, "sub-TESTZZ")
+        assert result.success, (
+            f"Annex subject rename failed in {ds_name}: {result.errors}"
+        )
+        # Old dir should be gone
+        assert not (ds_path / old_sub).exists()
+        # New dir should exist
+        assert (ds_path / "sub-TESTZZ").is_dir()
+        # No files should retain old label
+        for f in (ds_path / "sub-TESTZZ").rglob("*"):
+            if f.is_dir():
+                continue
+            assert old_sub not in f.name, (
+                f"File retains old label: {f.name}"
+            )
+
+
+@requires_bids_examples
+@requires_git_annex
+@pytest.mark.integration
+class TestAnnexSessionRenameSweep:
+    """Session rename on annexed datasets."""
+
+    @pytest.mark.ai_generated
+    @pytest.mark.parametrize(
+        "ds_name",
+        [
+            d
+            for d in _annex_dataset_ids()
+            if d in set(_find_session_dataset_ids())
+        ],
+    )
+    def test_session_rename_annex(
+        self, ds_name: str, tmp_path: Path
+    ) -> None:
+        src = BIDS_EXAMPLES_DIR / ds_name
+        ds_path = _annexify_dataset(src, tmp_path)
+        ds = BIDSDataset.from_path(ds_path)
+        ds.annexed_mode = AnnexedMode.SKIP
+
+        # Find first session
+        for sub_dir in sorted(ds_path.iterdir()):
+            if not sub_dir.is_dir() or not sub_dir.name.startswith("sub-"):
+                continue
+            for child in sorted(sub_dir.iterdir()):
+                if child.is_dir() and child.name.startswith("ses-"):
+                    old_label = child.name.removeprefix("ses-")
+                    result = rename_session(
+                        ds, old_label, "TESTZZ99"
+                    )
+                    assert result.success, (
+                        f"Annex session rename in {ds_name}: "
+                        f"{result.errors}"
+                    )
+                    # Verify no files retain old session
+                    new_ses = sub_dir / "ses-TESTZZ99"
+                    for f in new_ses.rglob("*"):
+                        if f.is_dir():
+                            continue
+                        assert f"ses-{old_label}" not in f.name, (
+                            f"File retains old session: {f.name}"
+                        )
+                    return
+        pytest.skip(f"no sessions in {ds_name}")

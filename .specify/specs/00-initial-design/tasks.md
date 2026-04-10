@@ -335,7 +335,7 @@
 
 - [ ] T076 [P] Documentation: populate `mkdocs` site with quickstart, API reference, CLI reference
 - [ ] T077 [P] Add `--json` output mode tests for all commands (SC-005)
-- [ ] T078 Run full `bids-examples` sweep across all operations (SC-001, SC-008). **Two modes**: (a) plain git (current bids-examples), (b) git-annex mode — clone bids-examples, `git annex init`, force all files into annex (`git annex add .`), then run all operations. Both modes must produce equivalent results. Operations to test per dataset: rename (random file), session-rename (if multi-session), subject-rename, migrate --dry-run. Validate dataset remains valid after each operation.
+- [X] T078 Run full `bids-examples` sweep across all operations (SC-001, SC-008). **Two modes**: (a) plain git (current bids-examples), (b) git-annex mode — clone bids-examples, `git annex init`, force all files into annex (`git annex add .`), then run all operations. Both modes must produce equivalent results. Operations to test per dataset: rename (random file), session-rename (if multi-session), subject-rename, migrate --dry-run. Validate dataset remains valid after each operation.
 - [ ] T079 [P] Test suite against multiple BIDS schema versions (1.8, 1.9, 2.0-dev) (SC-006)
 - [ ] T080 [P] Performance profiling on a 1000-subject synthetic dataset (SC-003)
 - [X] T081 Code cleanup: check for duplication (`tox -e duplication`), refactor
