@@ -48,3 +48,7 @@ adjust specification with the need for a global option on how to deal with annex
 ---
 
 there should also be abstraction for 'ensure_writable' or alike which would unlock file if it is in annex locked (symlink to .git/annex/objects) mode.  Also at vcs level I guess we might want to orchestrate 'annex add' after modifications to bring it back into "original state".
+
+---
+
+ok, commit the changes
