@@ -55,7 +55,7 @@ def split_dataset(
 
     # Walk through all files
     for f in sorted(dataset.root.rglob("*")):
-        if not f.is_file():
+        if f.is_dir():
             continue
         if f.name == "dataset_description.json":
             continue

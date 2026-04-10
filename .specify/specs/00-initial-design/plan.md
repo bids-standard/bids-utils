@@ -168,6 +168,20 @@ tests/
 
 **Dependencies**: Phase 1 complete. Can be done at any point after Phase 1, but should be done before real-world usage on annexed datasets.
 
+### Phase 1c: Symlink Safety & Dry-Run Detail (FR-003, FR-023, FR-024)
+
+**Goal**: Fix the `is_file()` symlink bug that silently skips annexed data files during rename operations. Enhance `--dry-run` to show per-file detail. Add annex operation logging.
+
+**Steps**:
+1. **Symlink bug fix (T092)**: Audit all `is_file()` calls used for file iteration. Replace with `not path.is_dir()` in `session.py`, `subject.py`, `run.py`, `split.py`, `merge.py`, `_sidecars.py`, `migrate.py`. Keep `is_file()` where checking for file existence (not iteration).
+2. **Annex test fixture (T093)**: `tmp_annex_dataset` in conftest.py — git-annex repo with locked symlinks alongside regular files.
+3. **Regression tests (T094)**: Session/subject/file rename on annexed dataset — verify all files including symlinks are renamed.
+4. **Dry-run detail (T095-T096)**: `--dry-run=overview|detailed`. Update `common_options`, ensure all library functions populate per-file `Change` entries. `output_result` renders overview vs detailed.
+5. **Annex logging (T097)**: INFO-level logging for get/unlock/add operations in `_io.py`.
+6. **Tests (T098)**: Verify `--dry-run=detailed` output.
+
+**Dependencies**: Phase 1b complete. BLOCKS real-world usage on annexed datasets.
+
 ### Phase 2: File Rename (Story 1 — P1)
 
 **Goal**: `bids-utils rename` working end-to-end with full test coverage.

@@ -45,7 +45,7 @@ def rename(
     set_entities: tuple[str, ...],
     suffix: str | None,
     include_sourcedata: bool,
-    dry_run: bool,
+    dry_run: str | None,
     json_output: bool,
     verbose: int,
     quiet: bool,
@@ -67,7 +67,7 @@ def rename(
         file_path,
         set_entities=entities,
         new_suffix=suffix,
-        dry_run=dry_run,
+        dry_run=bool(dry_run),
         include_sourcedata=include_sourcedata,
     )
 

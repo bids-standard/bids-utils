@@ -22,7 +22,7 @@ from bids_utils.migrate import migrate_dataset
 @common_options
 def migrate(
     to_version: str | None,
-    dry_run: bool,
+    dry_run: str | None,
     json_output: bool,
     verbose: int,
     quiet: bool,
@@ -35,7 +35,7 @@ def migrate(
     if schema_version:
         dataset.schema_version = schema_version
 
-    result = migrate_dataset(dataset, to_version=to_version, dry_run=dry_run)
+    result = migrate_dataset(dataset, to_version=to_version, dry_run=bool(dry_run))
 
     if json_output:
         output: dict[str, object] = {

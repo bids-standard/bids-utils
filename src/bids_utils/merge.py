@@ -114,7 +114,7 @@ def merge_datasets(
                 for item in sub_dir.iterdir():
                     if item.is_dir():
                         shutil.copytree(item, dest / item.name, dirs_exist_ok=True)
-                    elif item.is_file():
+                    elif not item.is_dir():
                         shutil.copy2(item, dest / item.name)
             else:
                 if dest.exists():

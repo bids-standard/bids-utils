@@ -76,16 +76,45 @@ def rename_session(
                 )
             )
 
+            # Enumerate per-file renames (for detailed dry-run)
+            old_label = old_id
+            new_label = new_id
+            file_renames: list[tuple[str, str]] = []
+            for f in sorted(old_ses_dir.rglob("*"), reverse=True):
+                if not f.is_dir() and old_label in f.name:
+                    new_name = f.name.replace(old_label, new_label)
+                    if f.name != new_name:
+                        # Record with paths relative to old_ses_dir
+                        rel = f.relative_to(old_ses_dir)
+                        new_rel = rel.parent / new_name
+                        result.changes.append(
+                            Change(
+                                action="rename",
+                                source=old_ses_dir / rel,
+                                target=new_ses_dir / new_rel,
+                                detail=f"  {f.name} → {new_name}",
+                            )
+                        )
+                        file_renames.append((f.name, new_name))
+
+            # Enumerate scans.tsv edits
+            for scans_file in old_ses_dir.rglob("*_scans.tsv"):
+                result.changes.append(
+                    Change(
+                        action="modify",
+                        source=scans_file,
+                        detail=f"  update {scans_file.name} entries",
+                    )
+                )
+
             if dry_run:
                 continue
 
             vcs.move(old_ses_dir, new_ses_dir)
 
             # Rename files within the session
-            old_label = old_id
-            new_label = new_id
             for f in sorted(new_ses_dir.rglob("*"), reverse=True):
-                if f.is_file() and old_label in f.name:
+                if not f.is_dir() and old_label in f.name:
                     new_name = f.name.replace(old_label, new_label)
                     new_path = f.parent / new_name
                     if f != new_path:
@@ -135,6 +164,26 @@ def rename_session(
                 )
             )
 
+            # Enumerate per-file renames for detailed dry-run
+            new_ses_label = new_id
+            for dt_dir in datatype_dirs:
+                for f in sorted(dt_dir.rglob("*")):
+                    if f.is_dir():
+                        continue
+                    if sub_name in f.name and new_ses_label not in f.name:
+                        new_name = f.name.replace(
+                            f"{sub_name}_", f"{sub_name}_{new_ses_label}_"
+                        )
+                        if f.name != new_name:
+                            result.changes.append(
+                                Change(
+                                    action="rename",
+                                    source=f,
+                                    target=new_ses_dir / dt_dir.name / new_name,
+                                    detail=f"  {f.name} → {new_name}",
+                                )
+                            )
+
             if dry_run:
                 continue
 
@@ -146,10 +195,12 @@ def rename_session(
                 vcs.move(dt_dir, target)
 
             # Rename files to include session entity
-            new_ses_label = new_id
             for f in sorted(new_ses_dir.rglob("*"), reverse=True):
-                if f.is_file() and sub_name in f.name and new_ses_label not in f.name:
-                    # Insert ses-X after sub-XX
+                if (
+                    not f.is_dir()
+                    and sub_name in f.name
+                    and new_ses_label not in f.name
+                ):
                     new_name = f.name.replace(
                         f"{sub_name}_", f"{sub_name}_{new_ses_label}_"
                     )

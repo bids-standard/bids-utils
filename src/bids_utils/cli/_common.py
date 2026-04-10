@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import json
+import logging
 import os
 import sys
 from collections.abc import Callable
@@ -23,8 +24,14 @@ def common_options(f: Callable[..., Any]) -> Callable[..., Any]:
     @click.option(
         "--dry-run",
         "-n",
-        is_flag=True,
-        help="Show what would change without modifying files.",
+        is_flag=False,
+        flag_value="overview",
+        default=None,
+        type=click.Choice(["overview", "detailed"]),
+        help=(
+            "Show what would change without modifying files. "
+            "Use --dry-run=detailed for per-file listing."
+        ),
     )
     @click.option("--json", "json_output", is_flag=True, help="Output results as JSON.")
     @click.option("-v", "--verbose", count=True, help="Increase verbosity.")
@@ -37,6 +44,23 @@ def common_options(f: Callable[..., Any]) -> Callable[..., Any]:
     )
     @functools.wraps(f)
     def wrapper(**kwargs: Any) -> Any:
+        # Configure logging from -v / -q
+        # Default: INFO (shows annex get operations)
+        # -v: DEBUG (shows unlock/add details)
+        # -q: WARNING (suppresses info messages)
+        verbose = kwargs.get("verbose", 0)
+        quiet = kwargs.get("quiet", False)
+        if quiet:
+            level = logging.WARNING
+        elif verbose:
+            level = logging.DEBUG
+        else:
+            level = logging.INFO
+        logging.basicConfig(
+            level=level,
+            format="%(message)s",
+            force=True,
+        )
         return f(**kwargs)
 
     return wrapper
@@ -70,7 +94,7 @@ def load_dataset(path: Path | None = None) -> BIDSDataset:
 def output_result(
     result: OperationResult,
     json_output: bool,
-    dry_run: bool,
+    dry_run: str | None,
     *,
     exit_code: int = 2,
 ) -> None:
@@ -83,7 +107,8 @@ def output_result(
     json_output
         If ``True``, emit a JSON document.
     dry_run
-        Used for the ``[DRY RUN]`` prefix in text mode.
+        ``"overview"`` for summary, ``"detailed"`` for per-file listing,
+        or ``None`` / falsy when not in dry-run mode.
     exit_code
         Exit code to use when ``result.success`` is ``False``.
     """
@@ -91,8 +116,19 @@ def output_result(
         click.echo(json.dumps(result.to_dict(), indent=2))
     else:
         prefix = "[DRY RUN] " if dry_run else ""
+        detailed = dry_run == "detailed"
+
         for change in result.changes:
-            click.echo(f"{prefix}{change.detail}")
+            if detailed:
+                # Per-file: show action, source → target
+                src = change.source
+                tgt = f" → {change.target}" if change.target else ""
+                click.echo(f"{prefix}{change.action}: {src}{tgt}")
+            else:
+                # Overview: skip indented detail lines (per-file items)
+                if change.detail.startswith("  "):
+                    continue
+                click.echo(f"{prefix}{change.detail}")
         for w in result.warnings:
             click.echo(f"Warning: {w}", err=True)
         for err in result.errors:

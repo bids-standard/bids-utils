@@ -213,7 +213,7 @@ Group-level options (before the command):
 - `--annexed MODE`: How to handle git-annex files without local content. Modes: `error` (default), `get`, `skip-warning`, `skip`. Also settable via `BIDS_UTILS_ANNEXED` env var.
 
 Per-command common options:
-- `--dry-run` / `-n`: Show what would change without modifying
+- `--dry-run` / `-n`: Show what would change without modifying. Accepts optional value: `overview` (default, summary) or `detailed` (every file operation listed).
 - `--json`: Machine-readable JSON output
 - `-v` / `-q`: Verbosity control
 - `--force`: Skip confirmation on destructive operations

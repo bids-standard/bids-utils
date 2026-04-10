@@ -48,7 +48,7 @@ def rename_subject(
     # Collect all files that need renaming
     files_to_rename: list[Path] = []
     for f in sorted(old_dir.rglob("*")):
-        if f.is_file() and old_id in f.name:
+        if not f.is_dir() and old_id in f.name:
             files_to_rename.append(f)
 
     # Record directory rename
@@ -97,7 +97,7 @@ def rename_subject(
 
     # Rename files within the new directory
     for f in sorted(new_dir.rglob("*"), reverse=True):
-        if f.is_file() and old_id in f.name:
+        if not f.is_dir() and old_id in f.name:
             new_name = f.name.replace(old_id, new_id)
             new_path = f.parent / new_name
             if f != new_path:

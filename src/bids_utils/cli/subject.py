@@ -23,7 +23,7 @@ def subject_rename_cmd(
     old: str,
     new: str,
     include_sourcedata: bool,
-    dry_run: bool,
+    dry_run: str | None,
     json_output: bool,
     verbose: int,
     quiet: bool,
@@ -34,7 +34,7 @@ def subject_rename_cmd(
     dataset = load_dataset()
 
     result = rename_subject(
-        dataset, old, new, dry_run=dry_run, include_sourcedata=include_sourcedata
+        dataset, old, new, dry_run=bool(dry_run), include_sourcedata=include_sourcedata
     )
     output_result(result, json_output, dry_run)
 
@@ -44,7 +44,7 @@ def subject_rename_cmd(
 @common_options
 def remove_cmd(
     subject: str,
-    dry_run: bool,
+    dry_run: str | None,
     json_output: bool,
     verbose: int,
     quiet: bool,
@@ -60,5 +60,5 @@ def remove_cmd(
 
     dataset = load_dataset()
 
-    result = remove_subject(dataset, subject, dry_run=dry_run, force=force)
+    result = remove_subject(dataset, subject, dry_run=bool(dry_run), force=force)
     output_result(result, json_output, dry_run)

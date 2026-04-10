@@ -48,7 +48,7 @@ def remove_run(
     # Find all files matching this run
     run_files: list[Path] = []
     for f in sorted(sub_dir.rglob("*")):
-        if f.is_file() and run_id in f.name:
+        if not f.is_dir() and run_id in f.name:
             run_files.append(f)
 
     if not run_files:
@@ -66,7 +66,7 @@ def remove_run(
     shifts: list[tuple[Path, Path]] = []
     if shift:
         for f in sorted(sub_dir.rglob("*")):
-            if not f.is_file():
+            if f.is_dir():
                 continue
             m = re.search(r"run-(\d+)", f.name)
             if not m:

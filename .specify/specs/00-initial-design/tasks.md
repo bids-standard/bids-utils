@@ -302,6 +302,33 @@
 
 ---
 
+## Phase 1c: Symlink Safety & Dry-Run Detail (FR-003, FR-023, FR-024)
+
+**Purpose**: Fix critical git-annex symlink handling bug and enhance `--dry-run` to show per-file detail. These are blocking issues for real-world usage on annexed datasets.
+
+### Bug fix: `is_file()` skips annexed symlinks (FR-023)
+
+- [X] T092 Replace all bare `path.is_file()` calls used for file iteration with `not path.is_dir()` (or `path.is_file() or path.is_symlink()`) in: `session.py` (2 sites), `subject.py` (2 sites), `run.py` (2 sites), `split.py` (1 site), `merge.py` (1 site), `_sidecars.py` (1 site), `migrate.py` (1 site). Preserve `is_file()` where semantically correct (e.g., `_dataset.py` checking `dataset_description.json` existence, `_scans.py` checking `_scans.tsv` existence — these are never annexed).
+- [X] T093 Add `tmp_annex_dataset` pytest fixture in `tests/conftest.py`: creates a git-annex repo with locked (symlinked) data files (`.nii.gz`) alongside regular git files (`.json`, `.tsv`). Requires `git annex` to be installed (mark tests `skipif` otherwise).
+- [X] T094 Write regression tests using `tmp_annex_dataset` for session-rename, subject-rename, and rename — verify that ALL files (including annexed symlinks) are renamed correctly (SC-008). Test both with content present and content absent.
+
+### Enhanced dry-run (FR-003 update)
+
+- [X] T095 Change `--dry-run` / `-n` from a boolean flag to an optional-value option: `--dry-run` (or `--dry-run=overview`) for current summary behavior, `--dry-run=detailed` for per-file listing. Update `common_options` in `cli/_common.py`, `OperationResult`, and `output_result()`. Library functions already populate `result.changes` with per-file detail — the change is in how `output_result` renders them.
+- [X] T096 Ensure all library functions populate `result.changes` with per-file detail (not just one summary `Change` per subject/session). Audit `session.py`, `subject.py`, `rename.py` — the rename function already does this; session/subject need to add per-file `Change` entries for individual file renames within the session/subject operation.
+
+### Annex operation logging (FR-024)
+
+- [X] T097 Add logging to `_io.py` for annex operations: log at INFO level when `ensure_content` fetches a file (`--annexed=get`), when `ensure_writable` unlocks, when `mark_modified` re-adds. In `--dry-run` mode, report which files would need content fetched. Wire through to CLI verbosity (`-v` enables DEBUG, default shows INFO, `-q` suppresses).
+
+### Tests
+
+- [X] T098 Write tests for `--dry-run=detailed` output: verify per-file change listing for session-rename, subject-rename, rename. Verify `--dry-run=overview` retains current behavior. Verify `--dry-run` without value defaults to overview.
+
+**Checkpoint**: `bids-utils --annexed=get session-rename --dry-run=detailed` shows every file that would be renamed/edited/fetched. Running without `--dry-run` on an annexed dataset correctly renames all files including symlinks.
+
+---
+
 ## Phase 12: Polish & Cross-Cutting Concerns
 
 **Purpose**: Improvements that affect multiple user stories.
@@ -323,6 +350,7 @@
 - **Phase 0 (Scaffolding)**: No dependencies — start immediately
 - **Phase 1 (Infrastructure)**: Depends on Phase 0 — BLOCKS all user stories
 - **Phase 1b (Annexed Content / FR-022)**: Depends on Phase 1. Can be done at any point but SHOULD be done before real-world usage on git-annex/DataLad datasets. Retroactively completes VCS integration from Phase 1.
+- **Phase 1c (Symlink Safety & Dry-Run Detail / FR-003, FR-023, FR-024)**: Depends on Phase 1b. BLOCKS real-world usage on annexed datasets — the symlink bug causes silent data loss (files not renamed). Should be done immediately after Phase 1b.
 - **Phase 2 (Rename / US1)**: Depends on Phase 1
 - **Phase 3 (Migrate 1.x / US2)**: Depends on Phase 2 (uses rename for suffix changes)
 - **Phase 4 (Migrate 2.0 / US3)**: Depends on Phase 3

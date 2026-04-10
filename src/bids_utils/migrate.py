@@ -489,7 +489,7 @@ def _scan_bids_files(dataset_root: Path) -> list[Path]:
     """Find all BIDS data files (non-JSON, non-TSV) in the dataset."""
     results: list[Path] = []
     for p in sorted(dataset_root.rglob("*")):
-        if not p.is_file():
+        if p.is_dir():
             continue
         # Skip non-BIDS directories
         rel = p.relative_to(dataset_root)

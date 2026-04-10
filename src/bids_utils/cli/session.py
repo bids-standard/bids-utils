@@ -23,7 +23,7 @@ def session_rename_cmd(
     old: str,
     new: str,
     subject: str | None,
-    dry_run: bool,
+    dry_run: str | None,
     json_output: bool,
     verbose: int,
     quiet: bool,
@@ -33,6 +33,6 @@ def session_rename_cmd(
     """Rename a session. Use '' for OLD to move into a new session."""
     dataset = load_dataset()
 
-    result = rename_session(dataset, old, new, subject=subject, dry_run=dry_run)
+    result = rename_session(dataset, old, new, subject=subject, dry_run=bool(dry_run))
 
     output_result(result, json_output, dry_run)

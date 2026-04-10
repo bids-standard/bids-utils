@@ -7,6 +7,7 @@ these helpers so that the ``--annexed`` policy is enforced consistently.
 from __future__ import annotations
 
 import json
+import logging
 import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -15,6 +16,8 @@ from bids_utils._types import AnnexedMode, ContentNotAvailableError
 
 if TYPE_CHECKING:
     from bids_utils._vcs import VCSBackend
+
+logger = logging.getLogger(__name__)
 
 
 def ensure_content(
@@ -42,6 +45,7 @@ def ensure_content(
         return
 
     if mode is AnnexedMode.GET:
+        logger.info("Fetching annexed content: %s", path)
         vcs.get_content([path])
         return
 
@@ -73,6 +77,7 @@ def ensure_writable(path: Path, vcs: VCSBackend) -> None:
     """
     if path.is_symlink() and path.exists():
         # Locked annexed file with content present — unlock it
+        logger.debug("Unlocking annexed file: %s", path)
         vcs.unlock([path])
 
 
@@ -84,6 +89,7 @@ def mark_modified(paths: list[Path], vcs: VCSBackend) -> None:
     (Git.add stages the file, NoVCS does nothing).
     """
     if paths:
+        logger.debug("Re-adding modified files: %s", [str(p) for p in paths])
         vcs.add(paths)
 
 

@@ -18,7 +18,7 @@ def split(
     suffix: str | None,
     datatype: str | None,
     output: str,
-    dry_run: bool,
+    dry_run: str | None,
     json_output: bool,
     verbose: int,
     quiet: bool,
@@ -29,7 +29,7 @@ def split(
     dataset = load_dataset()
 
     result = split_dataset(
-        dataset, output, suffix=suffix, datatype=datatype, dry_run=dry_run
+        dataset, output, suffix=suffix, datatype=datatype, dry_run=bool(dry_run)
     )
 
     output_result(result, json_output, dry_run)
