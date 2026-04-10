@@ -227,3 +227,17 @@ that tests barely nothing!
 review ALL tests of such kind and either modify or complement with operating in non-dry mode.  We also need to add a run time option to use bids-validator (check spec -- we had that!) to validate that dataset remains valid AFTER our operation if it was valid BEFORE our operation!
 
 So -- make sure we are in agreement with specification on testing actual changes to datasets and remaining bids valid!
+
+---
+
+<task-notification>
+<task-id>btyhd9wpb</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-yoh-proj-bids-bids-utils/941763d0-c503-4b0d-a46e-298f03c0dec2/tasks/btyhd9wpb.output</output-file>
+<status>completed</status>
+<summary>Background command "Run lint/type/duplication" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+it is wasteful to 'validate_before' every dataset every time it is used. Validated once, e.g. right after cloning of the bids-examples.  Also, for less of variability, choose specific release, e.g. current https://github.com/bids-standard/bids-examples/releases/tag/1.11.0 , or the latest among available.  Fixture for providing datasets into testing should reset them clean back and skip those which are (currently) invalid
