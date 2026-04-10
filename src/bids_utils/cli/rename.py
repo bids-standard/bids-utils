@@ -7,7 +7,13 @@ from pathlib import Path
 import click
 
 from bids_utils.cli import main
-from bids_utils.cli._common import common_options, load_dataset, output_result
+from bids_utils.cli._common import (
+    BIDS_FILE_TYPE,
+    ENTITY_TYPE,
+    common_options,
+    load_dataset,
+    output_result,
+)
 from bids_utils.rename import rename_file
 
 
@@ -23,11 +29,12 @@ def _parse_set_option(values: tuple[str, ...]) -> dict[str, str]:
 
 
 @main.command()
-@click.argument("file", type=click.Path(exists=False))
+@click.argument("file", type=BIDS_FILE_TYPE)
 @click.option(
     "--set",
     "set_entities",
     multiple=True,
+    type=ENTITY_TYPE,
     help="Set entity value (e.g., --set task=nback). Can be repeated.",
 )
 @click.option("--suffix", default=None, help="Set a new suffix.")

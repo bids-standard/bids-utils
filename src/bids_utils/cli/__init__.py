@@ -14,6 +14,7 @@ def main() -> None:
 # Import subcommand modules so they register with the click group.
 # This must happen after `main` is defined.
 from bids_utils.cli import (  # noqa: E402, F401
+    completion,
     merge,
     metadata,
     migrate,

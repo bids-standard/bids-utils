@@ -5,12 +5,17 @@ from __future__ import annotations
 import click
 
 from bids_utils.cli import main
-from bids_utils.cli._common import common_options, load_dataset, output_result
+from bids_utils.cli._common import (
+    SESSION_TYPE,
+    common_options,
+    load_dataset,
+    output_result,
+)
 from bids_utils.session import rename_session
 
 
 @main.command("session-rename")
-@click.argument("old")
+@click.argument("old", type=SESSION_TYPE)
 @click.argument("new")
 @click.option("--subject", default=None, help="Only rename for this subject.")
 @common_options

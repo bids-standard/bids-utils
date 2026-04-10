@@ -5,12 +5,17 @@ from __future__ import annotations
 import click
 
 from bids_utils.cli import main
-from bids_utils.cli._common import common_options, load_dataset, output_result
+from bids_utils.cli._common import (
+    SUBJECT_TYPE,
+    common_options,
+    load_dataset,
+    output_result,
+)
 from bids_utils.subject import remove_subject, rename_subject
 
 
 @main.command("subject-rename")
-@click.argument("old")
+@click.argument("old", type=SUBJECT_TYPE)
 @click.argument("new")
 @click.option("--include-sourcedata", is_flag=True, help="Also rename in sourcedata/.")
 @common_options
@@ -35,7 +40,7 @@ def subject_rename_cmd(
 
 
 @main.command("remove")
-@click.argument("subject")
+@click.argument("subject", type=SUBJECT_TYPE)
 @common_options
 def remove_cmd(
     subject: str,

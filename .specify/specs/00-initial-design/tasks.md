@@ -266,9 +266,9 @@
 
 ### Implementation
 
-- [ ] T083 [P] Implement `src/bids_utils/cli/completion.py`: `bids-utils completion [SHELL]` click command — auto-detect shell from `$SHELL`, output activation script to stdout. Supported: Bash, Zsh, Fish (Click 8.0+ built-in).
-- [ ] T084 Implement BIDS-aware custom completions: filesystem-derived items (`sub-*` directories, `ses-*` directories, BIDS file paths) and entity keys from schema (`task=`, `run=`, `acq=`). Uses `_dataset.py` for dataset root resolution (FR-020: honor `--dataset` or walk up from CWD to `dataset_description.json`).
-- [ ] T085 Write tests for completion in `tests/test_cli.py` or `tests/test_completion.py`: `bids-utils completion --help`, shell detection, activation script output for each shell, BIDS-aware completion produces expected items
+- [X] T083 [P] Implement `src/bids_utils/cli/completion.py`: `bids-utils completion [SHELL]` click command — auto-detect shell from `$SHELL`, output activation script to stdout. Supported: Bash, Zsh, Fish (Click 8.0+ built-in).
+- [X] T084 Implement BIDS-aware custom completions: filesystem-derived items (`sub-*` directories, `ses-*` directories, BIDS file paths) and entity keys from schema (`task=`, `run=`, `acq=`). Uses `_dataset.py` for dataset root resolution (FR-020: honor `--dataset` or walk up from CWD to `dataset_description.json`).
+- [X] T085 Write tests for completion in `tests/test_cli.py` or `tests/test_completion.py`: `bids-utils completion --help`, shell detection, activation script output for each shell, BIDS-aware completion produces expected items
 
 **Checkpoint**: `bids-utils completion` outputs working activation scripts with BIDS-aware completions.
 
