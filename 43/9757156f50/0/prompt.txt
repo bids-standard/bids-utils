@@ -56,3 +56,7 @@ ok, commit the changes
 ---
 
 /speckit.implement Phase 1b (Annexed Content / FR-022)
+
+---
+
+commit changes
