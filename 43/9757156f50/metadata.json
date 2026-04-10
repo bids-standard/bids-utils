@@ -1,0 +1,42 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "439757156f50",
+  "strategy": "manual-commit",
+  "branch": "00-initial-design",
+  "checkpoints_count": 2,
+  "files_touched": [
+    ".specify/specs/00-initial-design/tasks.md",
+    "src/bids_utils/_dataset.py",
+    "src/bids_utils/_io.py",
+    "src/bids_utils/_participants.py",
+    "src/bids_utils/_scans.py",
+    "src/bids_utils/_tsv.py",
+    "src/bids_utils/_types.py",
+    "src/bids_utils/_vcs.py",
+    "src/bids_utils/cli/__init__.py",
+    "src/bids_utils/cli/_common.py",
+    "src/bids_utils/metadata.py",
+    "src/bids_utils/migrate.py",
+    "src/bids_utils/rename.py",
+    "src/bids_utils/session.py",
+    "src/bids_utils/subject.py",
+    "tests/test_cli_common.py",
+    "tests/test_io.py",
+    "tests/test_vcs.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/43/9757156f50/0/metadata.json",
+      "transcript": "/43/9757156f50/0/full.jsonl",
+      "content_hash": "/43/9757156f50/0/content_hash.txt",
+      "prompt": "/43/9757156f50/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 246,
+    "cache_creation_tokens": 652245,
+    "cache_read_tokens": 22490097,
+    "output_tokens": 69618,
+    "api_call_count": 191
+  }
+}
