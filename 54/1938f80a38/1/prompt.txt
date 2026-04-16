@@ -1,0 +1,277 @@
+in which stage we have plans for git-annex integration?  Since when I try to e.g. rename session we already run into the problem that _scans.tsv needs to be fetched:
+
+❯ bids-utils session-rename ses-20230705 ses-202307XX
+Traceback (most recent call last):
+  File "/home/yoh/proj/bids/bids-utils/.venv/bin/bids-utils", line 10, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/home/yoh/proj/bids/bids-utils/.venv/lib/python3.13/site-packages/click/core.py", line 1485, in __call__
+    return self.main(*args, **kwargs)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/yoh/proj/bids/bids-utils/.venv/lib/python3.13/site-packages/click/core.py", line 1406, in main
+    rv = self.invoke(ctx)
+  File "/home/yoh/proj/bids/bids-utils/.venv/lib/python3.13/site-packages/click/core.py", line 1873, in invoke
+    return _process_result(sub_ctx.command.invoke(sub_ctx))
+                           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/home/yoh/proj/bids/bids-utils/.venv/lib/python3.13/site-packages/click/core.py", line 1269, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yoh/proj/bids/bids-utils/.venv/lib/python3.13/site-packages/click/core.py", line 824, in invoke
+    return callback(*args, **kwargs)
+  File "/home/yoh/proj/bids/bids-utils/src/bids_utils/cli/_common.py", line 40, in wrapper
+    return f(**kwargs)
+  File "/home/yoh/proj/bids/bids-utils/src/bids_utils/cli/session.py", line 36, in session_rename_cmd
+    result = rename_session(dataset, old, new, subject=subject, dry_run=dry_run)
+  File "/home/yoh/proj/bids/bids-utils/src/bids_utils/session.py", line 95, in rename_session
+    rows = read_scans_tsv(scans_file)
+  File "/home/yoh/proj/bids/bids-utils/src/bids_utils/_scans.py", line 12, in read_scans_tsv
+    return read_tsv(path)
+  File "/home/yoh/proj/bids/bids-utils/src/bids_utils/_tsv.py", line 12, in read_tsv
+    text = path.read_text(encoding="utf-8")
+  File "/usr/lib/python3.13/pathlib/_local.py", line 548, in read_text
+    return PathBase.read_text(self, encoding, errors, newline)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/pathlib/_abc.py", line 632, in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:
+         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/pathlib/_local.py", line 539, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/yoh/datalad/dbic/QA/sub-qa/ses-202307XX/sub-qa_ses-20230705_scans.tsv'
+❯ ls -ld /home/yoh/datalad/dbic/QA/sub-qa/ses-202307XX/sub-qa_ses-20230705_scans.tsv
+lrwxrwxrwx 1 yoh yoh 196 Jul 22  2023 /home/yoh/datalad/dbic/QA/sub-qa/ses-202307XX/sub-qa_ses-20230705_scans.tsv -> ../../.git/annex/objects/j2/zX/SHA256E-s673--47d43364d7a13d40161c35bd92383f2097f96b7d8858f88224d5128749acdf9f.tsv/SHA256E-s673--47d43364d7a13d40161c35bd92383f2097f96b7d8858f88224d5128749acdf9f.tsv
+
+---
+
+adjust specification with the need for a global option on how to deal with annex'ed content when is needed, e.g. `--annexed=error,get,skip-warning,skip`, so by default we would just error (but nicely and informatively), and then I could use  `bids-utils --annexed get session-rename ses-20230705 ses-202307XX` . Or would you recommend placement per operation (then should have common definition at least reused across commands) and other options?  plan for it
+
+---
+
+there should also be abstraction for 'ensure_writable' or alike which would unlock file if it is in annex locked (symlink to .git/annex/objects) mode.  Also at vcs level I guess we might want to orchestrate 'annex add' after modifications to bring it back into "original state".
+
+---
+
+ok, commit the changes
+
+---
+
+/speckit.implement Phase 1b (Annexed Content / FR-022)
+
+---
+
+commit changes
+
+---
+
+We need to clarify in the specification and plan tasks to imrove --dry-run mode -- it should allow for detailed depiction of actions, not only "high level". E.g. now we get 
+
+❯ bids-utils session-rename --dry-run ses-20230705 ses-202307XX
+[DRY RUN] sub-qa: rename ses-20230705 → ses-202307XX
+[DRY RUN] sub-qa64: rename ses-20230705 → ses-202307XX
+Warning: sub-amit: session ses-20230705 not found, skipping
+Warning: sub-emmet: session ses-20230705 not found, skipping
+Warning: sub-sid000143: session ses-20230705 not found, skipping
+
+
+whenever it actually entails many files renames and edits!  I think we could make it into `--dry-run=overview,detailed`, so if specified without value would  mean -- overview like now but allow for detailed where each action to be listed (file renamed, file edited, etc).  
+
+Related -- there should be logging over dry actions on "need to get content"; and also when running about getting content!
+
+Then also for session rename I noticed a bug:  as a result of rename some of the files remain having old sesison in its entity!
+
+ bids-utils --annexed get session-rename ses-20230705 ses-202307XX
+❯ git st
+On branch master
+Your branch is up to date with 'origin/master'.
+
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
+    renamed:    ses-20210329/anat/sub-qa_ses-20210329_acq-MPRAGE_T1w.nii.gz -> ses-2021032X/anat/sub-qa_ses-20210329_acq-MPRAGE_T1w.nii.gz
+    renamed:    ses-20210329/anat/sub-qa_ses-20210329_acq-MPRAGE_T1w.json -> ses-2021032X/anat/sub-qa_ses-2021032X_acq-MPRAGE_T1w.json
+    renamed:    ses-20210329/dwi/sub-qa_ses-20210329_acq-DTIX30Xp2Xs4_dwi.nii.gz -> ses-2021032X/dwi/sub-qa_ses-20210329_acq-DTIX30Xp2Xs4_dwi.nii.gz
+    renamed:    ses-20210329/dwi/sub-qa_ses-20210329_acq-DTIX30Xp2_dwi.nii.gz -> ses-2021032X/dwi/sub-qa_ses-20210329_acq-DTIX30Xp2_dwi.nii.gz
+    renamed:    ses-20210329/dwi/sub-qa_ses-20210329_acq-DTIX30Xp2Xs4_dwi.bval -> ses-2021032X/dwi/sub-qa_ses-2021032X_acq-DTIX30Xp2Xs4_dwi.bval
+    renamed:    ses-20210329/dwi/sub-qa_ses-20210329_acq-DTIX30Xp2Xs4_dwi.bvec -> ses-2021032X/dwi/sub-qa_ses-2021032X_acq-DTIX30Xp2Xs4_dwi.bvec
+    renamed:    ses-20210329/dwi/sub-qa_ses-20210329_acq-DTIX30Xp2Xs4_dwi.json -> ses-2021032X/dwi/sub-qa_ses-2021032X_acq-DTIX30Xp2Xs4_dwi.json
+    renamed:    ses-20210329/dwi/sub-qa_ses-20210329_acq-DTIX30Xp2_dwi.bval -> ses-2021032X/dwi/sub-qa_ses-2021032X_acq-DTIX30Xp2_dwi.bval
+    renamed:    ses-20210329/dwi/sub-qa_ses-20210329_acq-DTIX30Xp2_dwi.bvec -> ses-2021032X/dwi/sub-qa_ses-2021032X_acq-DTIX30Xp2_dwi.bvec
+    renamed:    ses-20210329/dwi/sub-qa_ses-20210329_acq-DTIX30Xp2_dwi.json -> ses-2021032X/dwi/sub-qa_ses-2021032X_acq-DTIX30Xp2_dwi.json
+    renamed:    ses-20210329/func/sub-qa_ses-20210329_fa-10_bold.nii.gz -> ses-2021032X/func/sub-qa_ses-20210329_fa-10_bold.nii.gz
+    renamed:    ses-20210329/func/sub-qa_ses-20210329_fa-77_bold.nii.gz -> ses-2021032X/func/sub-qa_ses-20210329_fa-77_bold.nii.gz
+    renamed:    ses-20210329/func/sub-qa_ses-20210329_task-rest_acq-p2Xs4X35mm_bold.nii.gz -> ses-2021032X/func/sub-qa_ses-20210329_task-rest_acq-p2Xs4X35mm_bold.nii.gz
+    renamed:    ses-20210329/func/sub-qa_ses-20210329_task-rest_acq-p2_bold.nii.gz -> ses-2021032X/func/sub-qa_ses-20210329_task-rest_acq-p2_bold.nii.gz
+    renamed:    ses-20210329/func/sub-qa_ses-20210329_fa-10_bold.json -> ses-2021032X/func/sub-qa_ses-2021032X_fa-10_bold.json
+    renamed:    ses-20210329/func/sub-qa_ses-20210329_fa-77_bold.json -> ses-2021032X/func/sub-qa_ses-2021032X_fa-77_bold.json
+    renamed:    ses-20210329/func/sub-qa_ses-20210329_task-rest_acq-p2Xs4X35mm_bold.json -> ses-2021032X/func/sub-qa_ses-2021032X_task-rest_acq-p2Xs4X35mm_bold.json
+    renamed:    ses-20210329/func/sub-qa_ses-20210329_task-rest_acq-p2Xs4X35mm_events.tsv -> ses-2021032X/func/sub-qa_ses-2021032X_task-rest_acq-p2Xs4X35mm_events.tsv
+    renamed:    ses-20210329/func/sub-qa_ses-20210329_task-rest_acq-p2_bold.json -> ses-2021032X/func/sub-qa_ses-2021032X_task-rest_acq-p2_bold.json
+    renamed:    ses-20210329/func/sub-qa_ses-20210329_task-rest_acq-p2_events.tsv -> ses-2021032X/func/sub-qa_ses-2021032X_task-rest_acq-p2_events.tsv
+    renamed:    ses-20210329/sub-qa_ses-20210329_scans.tsv -> ses-2021032X/sub-qa_ses-2021032X_scans.tsv
+    renamed:    ses-20230705/anat/sub-qa_ses-20230705_acq-MPRAGE_T1w.nii.gz -> ses-202307XX/anat/sub-qa_ses-20230705_acq-MPRAGE_T1w.nii.gz
+    renamed:    ses-20230705/anat/sub-qa_ses-20230705_acq-MPRAGE_T1w.json -> ses-202307XX/anat/sub-qa_ses-202307XX_acq-MPRAGE_T1w.json
+    renamed:    ses-20230705/dwi/sub-qa_ses-20230705_acq-DTIX30Xp2Xs4_dwi.nii.gz -> ses-202307XX/dwi/sub-qa_ses-20230705_acq-DTIX30Xp2Xs4_dwi.nii.gz
+    renamed:    ses-20230705/dwi/sub-qa_ses-20230705_acq-DTIX30Xp2_dwi.nii.gz -> ses-202307XX/dwi/sub-qa_ses-20230705_acq-DTIX30Xp2_dwi.nii.gz
+    renamed:    ses-20230705/dwi/sub-qa_ses-20230705_acq-DTIX30Xp2Xs4_dwi.bval -> ses-202307XX/dwi/sub-qa_ses-202307XX_acq-DTIX30Xp2Xs4_dwi.bval
+    renamed:    ses-20230705/dwi/sub-qa_ses-20230705_acq-DTIX30Xp2Xs4_dwi.bvec -> ses-202307XX/dwi/sub-qa_ses-202307XX_acq-DTIX30Xp2Xs4_dwi.bvec
+    renamed:    ses-20230705/dwi/sub-qa_ses-20230705_acq-DTIX30Xp2Xs4_dwi.json -> ses-202307XX/dwi/sub-qa_ses-202307XX_acq-DTIX30Xp2Xs4_dwi.json
+    renamed:    ses-20230705/dwi/sub-qa_ses-20230705_acq-DTIX30Xp2_dwi.bval -> ses-202307XX/dwi/sub-qa_ses-202307XX_acq-DTIX30Xp2_dwi.bval
+    renamed:    ses-20230705/dwi/sub-qa_ses-20230705_acq-DTIX30Xp2_dwi.bvec -> ses-202307XX/dwi/sub-qa_ses-202307XX_acq-DTIX30Xp2_dwi.bvec
+    renamed:    ses-20230705/dwi/sub-qa_ses-20230705_acq-DTIX30Xp2_dwi.json -> ses-202307XX/dwi/sub-qa_ses-202307XX_acq-DTIX30Xp2_dwi.json
+    renamed:    ses-20230705/func/sub-qa_ses-20230705_fa-10_bold.nii.gz -> ses-202307XX/func/sub-qa_ses-20230705_fa-10_bold.nii.gz
+    renamed:    ses-20230705/func/sub-qa_ses-20230705_fa-77_bold.nii.gz -> ses-202307XX/func/sub-qa_ses-20230705_fa-77_bold.nii.gz
+    renamed:    ses-20230705/func/sub-qa_ses-20230705_task-rest_acq-p2Xs4X35mm_bold.nii.gz -> ses-202307XX/func/sub-qa_ses-20230705_task-rest_acq-p2Xs4X35mm_bold.nii.gz
+    renamed:    ses-20230705/func/sub-qa_ses-20230705_task-rest_acq-p2_bold.nii.gz -> ses-202307XX/func/sub-qa_ses-20230705_task-rest_acq-p2_bold.nii.gz
+    renamed:    ses-20230705/func/sub-qa_ses-20230705_fa-10_bold.json -> ses-202307XX/func/sub-qa_ses-202307XX_fa-10_bold.json
+    renamed:    ses-20230705/func/sub-qa_ses-20230705_fa-77_bold.json -> ses-202307XX/func/sub-qa_ses-202307XX_fa-77_bold.json
+    renamed:    ses-20230705/func/sub-qa_ses-20230705_task-rest_acq-p2Xs4X35mm_bold.json -> ses-202307XX/func/sub-qa_ses-202307XX_task-rest_acq-p2Xs4X35mm_bold.json
+    renamed:    ses-20230705/func/sub-qa_ses-20230705_task-rest_acq-p2Xs4X35mm_events.tsv -> ses-202307XX/func/sub-qa_ses-202307XX_task-rest_acq-p2Xs4X35mm_events.tsv
+    renamed:    ses-20230705/func/sub-qa_ses-20230705_task-rest_acq-p2_bold.json -> ses-202307XX/func/sub-qa_ses-202307XX_task-rest_acq-p2_bold.json
+    renamed:    ses-20230705/func/sub-qa_ses-20230705_task-rest_acq-p2_events.tsv -> ses-202307XX/func/sub-qa_ses-202307XX_task-rest_acq-p2_events.tsv
+    renamed:    ses-20230705/sub-qa_ses-20230705_scans.tsv -> ses-202307XX/sub-qa_ses-20230705_scans.tsv
+
+
+this suggests not only a bug but insufficient unittesting, in particular as asked in the spec on bids-examples datasets.  Review specification and adjust for more detailed and extensive testing!
+
+---
+
+go ahead
+
+---
+
+where are we now in terms of implementation?
+
+---
+
+make T078 a priority now since I think it would identify lots of issues.  Meanwhile, an immediate issue came up while trying to rename a file which is under annex:
+
+❯ bids-utils rename --set task=lkajdsf sub-amit_ses-20180508_task-rest_acq-p2_bold.nii.gz
+Traceback (most recent call last):
+  File "/home/yoh/proj/bids/bids-utils/.venv/bin/bids-utils", line 10, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/home/yoh/proj/bids/bids-utils/.venv/lib/python3.13/site-packages/click/core.py", line 1485, in __call__
+    return self.main(*args, **kwargs)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/yoh/proj/bids/bids-utils/.venv/lib/python3.13/site-packages/click/core.py", line 1406, in main
+    rv = self.invoke(ctx)
+  File "/home/yoh/proj/bids/bids-utils/.venv/lib/python3.13/site-packages/click/core.py", line 1873, in invoke
+    return _process_result(sub_ctx.command.invoke(sub_ctx))
+                           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/home/yoh/proj/bids/bids-utils/.venv/lib/python3.13/site-packages/click/core.py", line 1269, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yoh/proj/bids/bids-utils/.venv/lib/python3.13/site-packages/click/core.py", line 824, in invoke
+    return callback(*args, **kwargs)
+  File "/home/yoh/proj/bids/bids-utils/src/bids_utils/cli/_common.py", line 64, in wrapper
+    return f(**kwargs)
+  File "/home/yoh/proj/bids/bids-utils/src/bids_utils/cli/rename.py", line 65, in rename
+    result = rename_file(
+        dataset,
+    ...<4 lines>...
+        include_sourcedata=include_sourcedata,
+    )
+  File "/home/yoh/proj/bids/bids-utils/src/bids_utils/rename.py", line 151, in rename_file
+    vcs.move(old, new)
+    ~~~~~~~~^^^^^^^^^^
+  File "/home/yoh/proj/bids/bids-utils/src/bids_utils/_vcs.py", line 194, in move
+    self._git.move(src, dst)
+    ~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/home/yoh/proj/bids/bids-utils/src/bids_utils/_vcs.py", line 87, in move
+    self._run("mv", str(src), str(dst))
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yoh/proj/bids/bids-utils/src/bids_utils/_vcs.py", line 77, in _run
+    return subprocess.run(
+           ~~~~~~~~~~~~~~^
+        ["git", *args],
+        ^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        check=True,
+        ^^^^^^^^^^^
+    )
+    ^
+  File "/usr/lib/python3.13/subprocess.py", line 577, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['git', 'mv', '/home/yoh/datalad/dbic/QA/.git/annex/objects/v3/P4/SHA256E-s43417252--8ce038c897cd560b1753df5f60249aed6bd68dd8ca4a814fc5b3e796f9c730ae.nii.gz/SHA256E-s43417252--8ce038c897cd560b1753df5f60249aed6bd68dd8ca4a814fc5b3e796f9c730ae.nii.gz', '/home/yoh/datalad/dbic/QA/.git/annex/objects/v3/P4/SHA256E-s43417252--8ce038c897cd560b1753df5f60249aed6bd68dd8ca4a814fc5b3e796f9c730ae.nii.gz/REDACTED.nii.gz']' returned non-zero exit status 128.
+
+
+apparently bids-utils resolves symlinks for some reason -- that should not be done!
+
+I think it might be also worth to add to T078 testing a mode where bids-examples are cloned, then we git-annex init that repository for git-annex and force all files into git-annex. Then perform the same testing -- results should be analogous and functions work without crashing.  That would confirm correct operation of implemented functionality. 
+
+So adjust specification accordingly starting from the constitution to make special accent to pay attention to git-annex repositories support.
+
+---
+
+<task-notification>
+<task-id>b0dwyjstq</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-yoh-proj-bids-bids-utils/4fd82c02-1ee6-4b9a-b305-9ee382243440/tasks/b0dwyjstq.output</output-file>
+<status>completed</status>
+<summary>Background command "Run full tox suite" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+I see that most of the tests operating on bids-examples operate in "dry" mode ,e.g.
+
+---
+
+/speckit.clarify I see that most of the tests operating on bids-examples operate in "dry" mode ,e.g.
+
+tests/integration/test_bids_examples.py::TestSubjectRenameSweep::test_subject_rename_dry_run[ds008] PASSED
+tests/integration/test_bids_examples.py::TestSubjectRenameSweep::test_subject_rename_dry_run[ds009] PASSED
+
+that tests barely nothing!
+
+review ALL tests of such kind and either modify or complement with operating in non-dry mode.  We also need to add a run time option to use bids-validator (check spec -- we had that!) to validate that dataset remains valid AFTER our operation if it was valid BEFORE our operation!
+
+So -- make sure we are in agreement with specification on testing actual changes to datasets and remaining bids valid!
+
+---
+
+<task-notification>
+<task-id>btyhd9wpb</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-yoh-proj-bids-bids-utils/941763d0-c503-4b0d-a46e-298f03c0dec2/tasks/btyhd9wpb.output</output-file>
+<status>completed</status>
+<summary>Background command "Run lint/type/duplication" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+it is wasteful to 'validate_before' every dataset every time it is used. Validated once, e.g. right after cloning of the bids-examples.  Also, for less of variability, choose specific release, e.g. current https://github.com/bids-standard/bids-examples/releases/tag/1.11.0 , or the latest among available.  Fixture for providing datasets into testing should reset them clean back and skip those which are (currently) invalid
+
+---
+
+rerun all tox tests and ensure that they pass.
+
+---
+
+<task-notification>
+<task-id>blm2xkk02</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-yoh-proj-bids-bids-utils/941763d0-c503-4b0d-a46e-298f03c0dec2/tasks/blm2xkk02.output</output-file>
+<status>completed</status>
+<summary>Background command "Run tox envs in foreground" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b8l0bmhw2</task-id>
+<tool-use-id>toolu_01JRdDsaMoe3bm7mDuaeQQg4</tool-use-id>
+<output-file>/tmp/claude-1000/-home-yoh-proj-bids-bids-utils/941763d0-c503-4b0d-a46e-298f03c0dec2/tasks/b8l0bmhw2.output</output-file>
+<status>completed</status>
+<summary>Background command "Run full tox suite" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bzx8lv3x4</task-id>
+<tool-use-id>toolu_01QZDr3YM61zzvsW3zVAQT2J</tool-use-id>
+<output-file>/tmp/claude-1000/-home-yoh-proj-bids-bids-utils/941763d0-c503-4b0d-a46e-298f03c0dec2/tasks/bzx8lv3x4.output</output-file>
+<status>completed</status>
+<summary>Background command "Run full tox suite (foreground)" completed (exit code 0)</summary>
+</task-notification>
