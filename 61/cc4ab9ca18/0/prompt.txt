@@ -1,0 +1,37 @@
+/speckit.clarify for migrate to 2.0 version we will plan for implementing https://github.com/bids-standard/bids-2-devel/issues/14 . Also review deprecations - e.g do we have migration for age 89+ to be just 89 now? overall worth re-reviewing current mentions of 'deprecat' in schema, figuring when introduced, and planing for the migrations to be implemented
+
+---
+
+great point!  I feel that B , but I think it is a great example for another dedicated optional migration which could be enabled if such values observed, which is changing the data but to make it "better" as in this case -- to satisfy HIPAA.  Note though, that value migration must be aware of units for that column -- if defined as "Units" in sidecar .json there or somehow otherwise (yet to figure out how to overload correctly via e.g. "definition" -- site https://github.com/bids-standard/bids-specification/issues/1633#issuecomment-4253032215 discussion and add TODO for it but requiring clarification on how units to be determined.
+
+---
+
+Overall -- A, BUT "the participant_id column → subject column" -- incorrect -- should be renamed to `subject_id` column.  Then you bring up an interesting point for potentially fixing potentially prsent bids_uri's referencing that file . BUT that should be a generic helper function which we might not scoped yet - to review  present .json and .tsv files for presence of bids: uri's and fix accordingly if referring to a renamed file!
+
+---
+
+B. But also seems like another usecase for additional optional migration level where we could potentially migrate value but it would require extra metadata entry... something to keep in mind and still allow potentially somehow
+
+---
+
+I think we , similar to validator having its schema for validation (which we harmonize in dandi-cli across different validators), here we should esablish schema for migration records.  "level" or "kind" could indeed be one field there, "id" would be the one identifying ("agecap89", etc), "description" some human description for migration.  And I think we had those already defined in some way? so here -- we should just expose filtering based on those attributes we define for migrations with some defaults (e.g. by default only "--level=safe" but across all ids).  so -- closer to A in terms of 'filtering'; but also the "--mode auto,non-interactive,interactive" to instruct indeed C-like behavior with auto being interactie when needed if PTY is available
+
+---
+
+I see schema saying it is deprecated in master:
+
+src/schema/rules/sidecars/ieeg.yaml:    DCOffsetCorrection: deprecated
+
+did you review deprecations at the level of src/schema/rules?  we might need to adjust specification / plan as to also have code which validates our deprecations against schema and inform user if we do not have some already announced deprecations implemented yet . recommend to upgrade (if not recent version) or file an issue . Add also establishing a github issue template for such issues so we could also easily look them up among all the other issues etc
+
+---
+
+/speckit-plan
+
+---
+
+/speckit-tasks
+
+---
+
+ok, let's keep sync.  Note that 'git annex get' has --jobs option thus capable of getting files in parallel, and any processing across subject/session folders of bids datasets is also easy to parallelize.  But it might be trickier to strike balance in deciding how many parallel threads etc to have. That is somewhat where async balances better between IO and CPU IMHO without special instructions.
