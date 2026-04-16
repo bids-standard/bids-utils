@@ -58,12 +58,29 @@ def find_sidecars(
         # Default: check common sidecar extensions
         check_exts = [".json", ".bvec", ".bval"]
 
+    # Start with schema-known sidecar extensions
     sidecars: list[Path] = []
+    seen_exts: set[str] = {ext}  # skip the primary file's own extension
     for sidecar_ext in check_exts:
-        if sidecar_ext == ext:
-            continue  # Skip the primary file's own extension
+        if sidecar_ext in seen_exts:
+            continue
+        seen_exts.add(sidecar_ext)
         candidate = parent / f"{stem}{sidecar_ext}"
         if candidate.exists() or candidate.is_symlink():
             sidecars.append(candidate)
+
+    # For data files (not sidecars themselves), also discover all same-stem
+    # companions.  This catches multi-file formats like BrainVision
+    # (.eeg + .vhdr + .vmrk), companion label tables (.tsv for dseg),
+    # and any other same-stem companions the schema doesn't list.
+    sidecar_only_exts = {".json", ".bvec", ".bval"}
+    if ext not in sidecar_only_exts:
+        for sibling in parent.iterdir():
+            if sibling.is_dir():
+                continue
+            sib_stem, sib_ext = _split_extension(sibling.name)
+            if sib_stem == stem and sib_ext not in seen_exts:
+                seen_exts.add(sib_ext)
+                sidecars.append(sibling)
 
     return sidecars

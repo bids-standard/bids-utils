@@ -542,6 +542,10 @@ class TestRenameMutatingValidated:
         if target is None:
             pytest.skip(reason=f"no renameable BIDS data file in {ds_name}")
 
+        # Record pre-existing errors so we only flag NEW ones
+        _, errors_before = validate_dataset(ds_copy)
+        pre_codes = {(e.get("code"), e.get("subCode")) for e in errors_before}
+
         before_count = sum(1 for f in ds_copy.rglob("*") if not f.is_dir())
 
         result = rename_file(ds, target, set_entities={"run": "99"})
@@ -553,8 +557,12 @@ class TestRenameMutatingValidated:
         )
 
         valid_after, errors_after = validate_dataset(ds_copy)
-        assert valid_after, (
-            f"Dataset {ds_name} invalid after rename: {errors_after}"
+        new_errors = [
+            e for e in errors_after
+            if (e.get("code"), e.get("subCode")) not in pre_codes
+        ]
+        assert not new_errors, (
+            f"Dataset {ds_name} has new errors after rename: {new_errors}"
         )
 
 
@@ -581,6 +589,11 @@ class TestSubjectRenameMutatingValidated:
             pytest.skip(reason=f"no sub-* directories in {ds_name}")
 
         old_sub = sub_dirs[0].name
+
+        # Record pre-existing errors so we only flag NEW ones
+        _, errors_before = validate_dataset(ds_copy)
+        pre_codes = {(e.get("code"), e.get("subCode")) for e in errors_before}
+
         result = rename_subject(ds, old_sub, "sub-TESTZZ")
         assert result.success, (
             f"Subject rename failed in {ds_name}: {result.errors}"
@@ -596,8 +609,12 @@ class TestSubjectRenameMutatingValidated:
                 )
 
         valid_after, errors_after = validate_dataset(ds_copy)
-        assert valid_after, (
-            f"Dataset {ds_name} invalid after subject rename: {errors_after}"
+        new_errors = [
+            e for e in errors_after
+            if (e.get("code"), e.get("subCode")) not in pre_codes
+        ]
+        assert not new_errors, (
+            f"Dataset {ds_name} has new errors after subject rename: {new_errors}"
         )
 
 
@@ -632,6 +649,10 @@ class TestSessionRenameMutatingValidated:
         if old_label is None:
             pytest.skip(reason=f"no ses-* directory in {ds_name}")
 
+        # Record pre-existing errors so we only flag NEW ones
+        _, errors_before = validate_dataset(ds_copy)
+        pre_codes = {(e.get("code"), e.get("subCode")) for e in errors_before}
+
         result = rename_session(ds, old_label, "TESTZZ99")
         assert result.success, (
             f"Session rename failed in {ds_name}: {result.errors}"
@@ -648,8 +669,12 @@ class TestSessionRenameMutatingValidated:
                 )
 
         valid_after, errors_after = validate_dataset(ds_copy)
-        assert valid_after, (
-            f"Dataset {ds_name} invalid after session rename: {errors_after}"
+        new_errors = [
+            e for e in errors_after
+            if (e.get("code"), e.get("subCode")) not in pre_codes
+        ]
+        assert not new_errors, (
+            f"Dataset {ds_name} has new errors after session rename: {new_errors}"
         )
 
 
