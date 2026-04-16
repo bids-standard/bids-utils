@@ -13,3 +13,7 @@
 ---
 
 There is a huge number of failing tests if running overall tox. See .duct/logs/2026.04.16T13.07.25-1242697_* and address. See if any changes to specification are needed to reflect
+
+---
+
+fix bugs -- we need to get green CI before proceeding to any next stage
