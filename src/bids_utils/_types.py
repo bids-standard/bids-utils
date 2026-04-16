@@ -18,6 +18,22 @@ class AnnexedMode(Enum):
     SKIP = "skip"
 
 
+class MigrationLevel(str, Enum):
+    """Tier of a migration rule."""
+
+    SAFE = "safe"
+    ADVISORY = "advisory"
+    NON_AUTO_FIXABLE = "non-auto-fixable"
+
+
+class MigrationMode(str, Enum):
+    """Interaction mode for migration."""
+
+    AUTO = "auto"
+    NON_INTERACTIVE = "non-interactive"
+    INTERACTIVE = "interactive"
+
+
 class ContentNotAvailableError(FileNotFoundError):
     """Raised when annexed file content is not locally available."""
 

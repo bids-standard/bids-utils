@@ -554,3 +554,334 @@ class TestMigrate20:
             "nothing" in w.lower() or "no applicable" in w.lower()
             for w in result.warnings
         )
+
+
+# ---------------------------------------------------------------------------
+# Phase 3a: Migration Rule Schema & Tiered Levels (T099–T110)
+# ---------------------------------------------------------------------------
+
+
+class TestMigrationLevels:
+    """Tests for tiered migration levels (FR-029, FR-030)."""
+
+    @pytest.mark.ai_generated
+    def test_default_level_safe(self, tmp_path: Path) -> None:
+        """--level=safe applies only safe rules."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        func = ds_path / "sub-01" / "func"
+        func.mkdir(parents=True)
+        # BasedOn is safe; DCOffsetCorrection is advisory
+        sidecar = func / "sub-01_task-rest_bold.json"
+        sidecar.write_text(
+            json.dumps(
+                {
+                    "BasedOn": ["sub-01/anat/sub-01_T1w.nii.gz"],
+                    "DCOffsetCorrection": "none",
+                }
+            )
+        )
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds, level="safe")
+
+        rule_ids = {f.rule.id for f in result.findings}
+        assert "field_rename_BasedOn_to_Sources" in rule_ids
+        assert "field_removal_DCOffsetCorrection" not in rule_ids
+
+    @pytest.mark.ai_generated
+    def test_level_advisory_includes_safe(self, tmp_path: Path) -> None:
+        """--level=advisory applies both safe and advisory rules."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        func = ds_path / "sub-01" / "func"
+        func.mkdir(parents=True)
+        sidecar = func / "sub-01_task-rest_bold.json"
+        sidecar.write_text(
+            json.dumps(
+                {
+                    "BasedOn": ["sub-01/anat/sub-01_T1w.nii.gz"],
+                    "DCOffsetCorrection": "none",
+                }
+            )
+        )
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds, level="advisory")
+
+        rule_ids = {f.rule.id for f in result.findings}
+        assert "field_rename_BasedOn_to_Sources" in rule_ids
+        assert "field_removal_DCOffsetCorrection" in rule_ids
+
+    @pytest.mark.ai_generated
+    def test_level_all_includes_everything(self, tmp_path: Path) -> None:
+        """--level=all includes non-auto-fixable in findings."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        anat = ds_path / "sub-01" / "anat"
+        anat.mkdir(parents=True)
+        t2star = anat / "sub-01_T2star.nii.gz"
+        t2star.write_bytes(b"")
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds, level="all", dry_run=True)
+
+        suffix_findings = [
+            f
+            for f in result.findings
+            if f.rule.category == "suffix_deprecation"
+            and "T2star" in str(f.current_value)
+        ]
+        assert suffix_findings
+        assert not suffix_findings[0].can_auto_fix
+
+    @pytest.mark.ai_generated
+    def test_rule_id_filter(self, tmp_path: Path) -> None:
+        """--rule-id selects specific rules only."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        func = ds_path / "sub-01" / "func"
+        func.mkdir(parents=True)
+        sidecar = func / "sub-01_task-rest_bold.json"
+        sidecar.write_text(
+            json.dumps(
+                {
+                    "BasedOn": ["sub-01/anat/sub-01_T1w.nii.gz"],
+                    "RawSources": ["rawdata/sub-01.nii"],
+                }
+            )
+        )
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(
+            ds,
+            rule_ids=["field_rename_BasedOn_to_Sources"],
+            dry_run=True,
+        )
+
+        rule_ids = {f.rule.id for f in result.findings}
+        assert "field_rename_BasedOn_to_Sources" in rule_ids
+        assert "field_rename_RawSources_to_Sources" not in rule_ids
+
+    @pytest.mark.ai_generated
+    def test_exclude_rule_filter(self, tmp_path: Path) -> None:
+        """--exclude-rule excludes specific rules."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        func = ds_path / "sub-01" / "func"
+        func.mkdir(parents=True)
+        sidecar = func / "sub-01_task-rest_bold.json"
+        sidecar.write_text(
+            json.dumps(
+                {
+                    "BasedOn": ["sub-01/anat/sub-01_T1w.nii.gz"],
+                    "RawSources": ["rawdata/sub-01.nii"],
+                }
+            )
+        )
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(
+            ds,
+            exclude_rules=["field_rename_BasedOn_to_Sources"],
+            dry_run=True,
+        )
+
+        rule_ids = {f.rule.id for f in result.findings}
+        assert "field_rename_BasedOn_to_Sources" not in rule_ids
+        assert "field_rename_RawSources_to_Sources" in rule_ids
+
+
+class TestAcquisitionDuration:
+    @pytest.mark.ai_generated
+    def test_renamed_when_volumetiming_present(self, tmp_path: Path) -> None:
+        """AcquisitionDuration renamed when VolumeTiming is present."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        func = ds_path / "sub-01" / "func"
+        func.mkdir(parents=True)
+        sidecar = func / "sub-01_task-rest_bold.json"
+        sidecar.write_text(
+            json.dumps(
+                {
+                    "AcquisitionDuration": 30.0,
+                    "VolumeTiming": [0, 2, 4],
+                }
+            )
+        )
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds, level="safe")
+
+        acq_findings = [
+            f
+            for f in result.findings
+            if "AcquisitionDuration" in str(f.current_value)
+        ]
+        assert acq_findings
+        assert acq_findings[0].can_auto_fix
+
+        data = json.loads(sidecar.read_text())
+        assert "AcquisitionDuration" not in data
+        assert data["FrameAcquisitionDuration"] == 30.0
+
+    @pytest.mark.ai_generated
+    def test_flagged_not_auto_fixable_without_volumetiming(
+        self, tmp_path: Path
+    ) -> None:
+        """AcquisitionDuration flagged as advisory without VolumeTiming."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        func = ds_path / "sub-01" / "func"
+        func.mkdir(parents=True)
+        sidecar = func / "sub-01_task-rest_bold.json"
+        original = json.dumps({"AcquisitionDuration": 30.0})
+        sidecar.write_text(original)
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds, level="advisory", dry_run=True)
+
+        acq_findings = [
+            f
+            for f in result.findings
+            if "AcquisitionDuration" in str(f.current_value)
+        ]
+        assert acq_findings
+        assert not acq_findings[0].can_auto_fix
+
+
+class TestFieldRemoval:
+    @pytest.mark.ai_generated
+    def test_dcoffsetcorrection_removed_at_advisory(self, tmp_path: Path) -> None:
+        """DCOffsetCorrection removed when level=advisory."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        ieeg = ds_path / "sub-01" / "ieeg"
+        ieeg.mkdir(parents=True)
+        sidecar = ieeg / "sub-01_task-rest_ieeg.json"
+        sidecar.write_text(json.dumps({"DCOffsetCorrection": "none"}))
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds, level="advisory")
+
+        removal_findings = [
+            f
+            for f in result.findings
+            if f.rule.id == "field_removal_DCOffsetCorrection"
+        ]
+        assert removal_findings
+
+        data = json.loads(sidecar.read_text())
+        assert "DCOffsetCorrection" not in data
+
+    @pytest.mark.ai_generated
+    def test_hardcopydevicesoftwareversion_removed_at_advisory(
+        self, tmp_path: Path
+    ) -> None:
+        """HardcopyDeviceSoftwareVersion removed when level=advisory."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        func = ds_path / "sub-01" / "func"
+        func.mkdir(parents=True)
+        sidecar = func / "sub-01_task-rest_bold.json"
+        sidecar.write_text(
+            json.dumps({"HardcopyDeviceSoftwareVersion": "1.0"})
+        )
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds, level="advisory")
+
+        removal_findings = [
+            f
+            for f in result.findings
+            if f.rule.id == "field_removal_HardcopyDeviceSoftwareVersion"
+        ]
+        assert removal_findings
+
+        data = json.loads(sidecar.read_text())
+        assert "HardcopyDeviceSoftwareVersion" not in data
+
+
+class TestAge89:
+    @pytest.mark.ai_generated
+    def test_89plus_string_converted_to_numeric(self, tmp_path: Path) -> None:
+        """String '89+' in age column converted to '89'."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        participants = ds_path / "participants.tsv"
+        participants.write_text(
+            "participant_id\tage\nsub-01\t89+\nsub-02\t25\n"
+        )
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds, level="safe")
+
+        age_findings = [
+            f for f in result.findings if f.rule.id == "age_89plus_string"
+        ]
+        assert age_findings
+
+        text = participants.read_text()
+        assert "89+" not in text
+        # The value should now be "89"
+        lines = text.strip().split("\n")
+        cols = lines[1].split("\t")
+        assert cols[1] == "89"
+
+    @pytest.mark.ai_generated
+    def test_numeric_above_89_not_changed_at_safe(self, tmp_path: Path) -> None:
+        """Numeric age > 89 is NOT changed at level=safe."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        participants = ds_path / "participants.tsv"
+        participants.write_text(
+            "participant_id\tage\nsub-01\t95\n"
+        )
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds, level="safe")
+
+        age_findings = [
+            f for f in result.findings if f.rule.id == "age_cap_89"
+        ]
+        assert not age_findings
+
+        text = participants.read_text()
+        assert "95" in text
+
+    @pytest.mark.ai_generated
+    def test_numeric_above_89_capped_at_advisory(self, tmp_path: Path) -> None:
+        """Numeric age > 89 capped to 89 at level=advisory."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        participants = ds_path / "participants.tsv"
+        participants.write_text(
+            "participant_id\tage\nsub-01\t95\nsub-02\t25\n"
+        )
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds, level="advisory")
+
+        age_findings = [
+            f for f in result.findings if f.rule.id == "age_cap_89"
+        ]
+        assert age_findings
+
+        text = participants.read_text()
+        lines = text.strip().split("\n")
+        cols = lines[1].split("\t")
+        assert cols[1] == "89"
+
+    @pytest.mark.ai_generated
+    def test_age_non_year_units_skipped(self, tmp_path: Path) -> None:
+        """Age column with non-year units is skipped."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        participants = ds_path / "participants.tsv"
+        participants.write_text(
+            "participant_id\tage\nsub-01\t89+\n"
+        )
+        # Sidecar specifying non-year units
+        participants_json = ds_path / "participants.json"
+        participants_json.write_text(
+            json.dumps({"age": {"Description": "Age in months", "Units": "months"}})
+        )
+
+        ds = BIDSDataset.from_path(ds_path)
+        result = migrate_dataset(ds, level="safe")
+
+        age_findings = [
+            f for f in result.findings if "age" in f.rule.id
+        ]
+        assert not age_findings
+
+        # Value unchanged
+        text = participants.read_text()
+        assert "89+" in text
