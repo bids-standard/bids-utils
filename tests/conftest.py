@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-import warnings
 from pathlib import Path
 
 import pytest
@@ -54,14 +53,13 @@ def validate_dataset(ds_path: Path) -> tuple[bool, list[dict]]:
     try:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:
-        # Validator crashed or produced no JSON — treat as inconclusive
-        # rather than a dataset error (the validator has known bugs with
-        # certain file patterns like eyetracking)
-        warnings.warn(
-            f"bids-validator-deno produced no JSON output: {result.stderr[:200]}",
-            stacklevel=2,
-        )
-        return True, []
+        return False, [
+            {
+                "code": "VALIDATOR_PARSE_ERROR",
+                "severity": "error",
+                "message": result.stderr[:500],
+            }
+        ]
 
     # v2 validator: issues.issues is a flat list with "severity" field
     all_issues = data.get("issues", {}).get("issues", [])
@@ -75,11 +73,6 @@ def validate_dataset(ds_path: Path) -> tuple[bool, list[dict]]:
         # (e.g., ds000248/sub-01/anat/sub-01_THISSUFFIXISNOTVALID.json)
         "NOT_INCLUDED",
         "SIDECAR_WITHOUT_DATAFILE",
-        # Validator internal error (crash on certain file patterns)
-        "VALIDATOR_PARSE_ERROR",
-        # Tests may add entities (run) to files whose schema rule doesn't
-        # allow that entity — this is a test limitation, not data corruption
-        "ENTITY_NOT_IN_RULE",
     }
     errors = [
         i

@@ -26,11 +26,19 @@ def find_sidecars(
     file_path: Path,
     schema: BIDSSchema | None = None,
 ) -> list[Path]:
-    """Find all sidecar files associated with a BIDS file.
+    """Find all **same-directory** sidecar files associated with a BIDS file.
 
-    Given a primary data file (e.g., sub-01_task-rest_bold.nii.gz),
-    returns all existing sidecar files in the same directory
-    (e.g., sub-01_task-rest_bold.json, .bvec, .bval).
+    Given a primary data file (e.g., ``sub-01_task-rest_bold.nii.gz``),
+    returns all existing files in the **same directory** that share the
+    same stem (e.g., ``.json``, ``.bvec``, ``.bval``, ``.tsv`` label
+    tables, BrainVision companions ``.eeg``/``.vhdr``/``.vmrk``).
+
+    .. note::
+
+       This function does **not** walk the BIDS inheritance hierarchy.
+       Higher-level sidecars (e.g., a ``task-rest_bold.json`` at the
+       dataset root) are not returned.  For inheritance-aware metadata
+       resolution, see ``metadata.py``.
 
     Parameters
     ----------

@@ -461,8 +461,14 @@ def _read_json_safe(
 
 
 def _scan_json_files(dataset_root: Path) -> list[Path]:
-    """Find all JSON sidecar files in the dataset."""
-    return sorted(dataset_root.rglob("*.json"))
+    """Find all JSON sidecar files in the dataset (skips dotdirs)."""
+    results: list[Path] = []
+    for p in sorted(dataset_root.rglob("*.json")):
+        rel = p.relative_to(dataset_root)
+        if rel.parts and rel.parts[0].startswith("."):
+            continue
+        results.append(p)
+    return results
 
 
 def _scan_for_field_rename(
@@ -630,12 +636,9 @@ def _scan_bids_files(dataset_root: Path) -> list[Path]:
         # Skip non-BIDS directories
         rel = p.relative_to(dataset_root)
         parts = rel.parts
-        if parts and parts[0] in (
-            "derivatives",
-            "sourcedata",
-            "code",
-            ".git",
-            ".datalad",
+        if parts and (
+            parts[0].startswith(".")  # dotdirs: .git, .datalad, etc.
+            or parts[0] in ("derivatives", "sourcedata", "code")
         ):
             continue
         # Skip JSON sidecars, TSV files, and dataset_description

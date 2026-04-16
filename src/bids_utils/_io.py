@@ -180,9 +180,9 @@ def update_json_references(
     """
     modified_files: list[Path] = []
     for json_path in sorted(dataset_root.rglob("*.json")):
-        # Skip .git/ and other non-BIDS directories
+        # Skip dotdirs — .git, .datalad, .heudiconv, etc. are never BIDS data
         rel = json_path.relative_to(dataset_root)
-        if rel.parts and rel.parts[0] in (".git", ".datalad", ".heudiconv"):
+        if rel.parts and rel.parts[0].startswith("."):
             continue
         # Skip files inside directory-based files
         if any(
