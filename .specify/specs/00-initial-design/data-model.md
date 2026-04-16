@@ -162,30 +162,43 @@ Resolved metadata = merge all levels, leaf overrides higher levels.
 ## Migration Model
 
 ```python
+class MigrationLevel(str, Enum):
+    """Tier of a migration rule (FR-029)."""
+    SAFE = "safe"                  # Auto-applied by default
+    ADVISORY = "advisory"          # Opt-in via --level=advisory (data-lossy or context-dependent)
+    NON_AUTO_FIXABLE = "non-auto-fixable"  # Report only (ambiguous, needs human judgment)
+
+class MigrationMode(str, Enum):
+    """Interaction mode for migration (FR-030)."""
+    AUTO = "auto"                  # Interactive when PTY available, non-interactive otherwise
+    NON_INTERACTIVE = "non-interactive"  # Only auto-fixable, skip prompts
+    INTERACTIVE = "interactive"    # Prompt for each advisory/ambiguous finding
+
 @dataclass
 class MigrationRule:
-    """A single schema-derived migration rule."""
-    id: str                        # Rule identifier from schema
+    """A single schema-derived migration rule (FR-029).
+
+    Formalized schema analogous to validator schemas (cf. dandi-cli).
+    Rules are filterable by id, level, category, from_version."""
+    id: str                        # Unique identifier (e.g., "age_89plus_string", "field_rename_BasedOn_to_Sources")
     from_version: str              # First version where this is deprecated
+    level: MigrationLevel          # safe, advisory, or non-auto-fixable
     category: Literal["field_rename", "value_rename", "suffix_rename",
-                       "path_format", "cross_file_move"]
+                       "path_format", "cross_file_move", "field_removal",
+                       "tsv_column_value", "file_rename", "column_rename",
+                       "enum_rename", "deprecated_template",
+                       "entity_rename", "structural_reorg", "metadata_key_change"]
     description: str               # Human-readable
 
     # Category-specific fields
-    old_field: str | None          # For field_rename
+    old_field: str | None          # For field_rename/field_removal
     new_field: str | None
     old_value: str | None          # For value_rename
     new_value: str | None
     affected_suffixes: list[str]   # Which file types this applies to
-
-@dataclass
-class MigrationPlan:
-    """Complete plan for migrating a dataset."""
-    dataset: BIDSDataset
-    from_version: str
-    to_version: str
-    rules: list[MigrationRule]     # Ordered by version, then priority
-    findings: list[MigrationFinding]  # What was found in the actual dataset
+    metadata_key: str | None       # For value renames: which metadata key
+    condition: Callable[..., bool] | None  # Contextual guard (e.g., VolumeTiming present)
+    handler: Callable[..., list[MigrationFinding]] | None
 
 @dataclass
 class MigrationFinding:
@@ -199,11 +212,21 @@ class MigrationFinding:
 
 @dataclass
 class MigrationResult:
-    """Result of migrate_dataset(), extends MigrationPlan with outcome."""
-    plan: MigrationPlan
+    """Result of migrate_dataset()."""
     success: bool
     dry_run: bool
-    applied: list[MigrationFinding]   # Findings that were auto-fixed
-    skipped: list[MigrationFinding]   # Findings requiring human judgment
+    from_version: str
+    to_version: str
+    findings: list[MigrationFinding]  # All matches found
+    changes: list[Change]             # What was actually applied
+    warnings: list[str]
     errors: list[str]
+
+@dataclass
+class AuditResult:
+    """Result of schema deprecation audit (FR-033)."""
+    schema_version: str
+    implemented: list[str]            # Rule IDs with coverage
+    missing: list[dict]               # Schema deprecations without rules
+    schema_locations_scanned: list[str]  # Which schema levels were checked
 ```

@@ -138,6 +138,77 @@
 
 ---
 
+## Phase 3a: Migration Rule Schema & Tiered Levels (FR-029, FR-030)
+
+**Purpose**: Formalize the migration rule schema (analogous to validator schemas) and expose tiered migration levels and interaction modes via CLI. Prerequisite for new migration rules in Phase 3b.
+
+### Migration rule schema (FR-029)
+
+- [ ] T099 [US2] Add `level` field (`safe` | `advisory` | `non-auto-fixable`) to `MigrationRule` dataclass in `src/bids_utils/migrate.py`. Add `MigrationLevel` enum to `src/bids_utils/_types.py`. Assign `level` to all existing registered rules: field renames → `safe`, enum renames → `safe`, path format → `safe`, DOI → `safe`, ScanDate cross-file move → `safe`, suffix _phase → `safe`, ambiguous suffixes (T2star, FLASH, PD) → `non-auto-fixable`, deprecated templates → `non-auto-fixable`.
+- [ ] T100 [P] [US2] Add `condition` field (optional `Callable[..., bool]`) to `MigrationRule` for contextual guards. Not wired to any rule yet — infrastructure only. Update `_scan_*` functions to call `rule.condition(context)` if present and skip the rule if it returns `False`.
+
+### CLI filtering (FR-030)
+
+- [ ] T101 [US2] Add `MigrationMode` enum (`auto`, `non-interactive`, `interactive`) to `src/bids_utils/_types.py`. Add `level`, `mode`, `rule_ids`, `exclude_rules` parameters to `migrate_dataset()` in `src/bids_utils/migrate.py`. Filter registered rules by level (cumulative: `advisory` includes `safe`; `all` includes everything). Filter by `rule_ids`/`exclude_rules` if provided.
+- [ ] T102 [US2] Update `src/bids_utils/cli/migrate.py`: add `--level` (choice: safe/advisory/all, default: safe), `--mode` (choice: auto/non-interactive/interactive, default: auto), `--rule-id` (multiple, str), `--exclude-rule` (multiple, str) click options. Wire to `migrate_dataset()` parameters.
+- [ ] T103 [US2] Implement interactive mode in `migrate_dataset()`: when `mode=interactive` or `mode=auto` with PTY detected, prompt user for each `advisory` or `non-auto-fixable` finding. Accept/skip/abort. When `mode=non-interactive`, apply only auto-fixable rules at the selected level, skip others silently.
+
+### New 1.x migration rules
+
+- [ ] T104 [US2] Register `AcquisitionDuration` → `FrameAcquisitionDuration` migration rule in `src/bids_utils/migrate.py` (FR-026). Level: `safe`. Condition: `VolumeTiming` must be present in the same sidecar JSON. Implement handler: scan BOLD/ASL sidecars, check condition, rename field. When `AcquisitionDuration` exists without `VolumeTiming`, register a separate finding as `non-auto-fixable` with clear reason.
+- [ ] T105 [P] [US2] Register `DCOffsetCorrection` field removal rule in `src/bids_utils/migrate.py` (FR-031). Level: `advisory`. Scope: iEEG sidecars. Handler: remove the field from JSON sidecar. Warn about data loss.
+- [ ] T106 [P] [US2] Register `HardcopyDeviceSoftwareVersion` field removal rule in `src/bids_utils/migrate.py` (FR-032). Level: `advisory`. Scope: MRI sidecars. Handler: remove the field. Warn about data loss.
+- [ ] T107 [US2] Register age `"89+"` string → numeric `89` rule in `src/bids_utils/migrate.py` (FR-027). Level: `safe`. Handler: scan `participants.tsv` `age` column for `"89+"` string values. **Unit-aware**: read `participants.json` sidecar, check if `"Units"` is defined for `age`; if non-year units, skip with warning. Convert matched strings to numeric `89`.
+- [ ] T108 [P] [US2] Register HIPAA age cap rule (id: `age_cap_89`) in `src/bids_utils/migrate.py` (FR-027). Level: `advisory`. Handler: scan `participants.tsv` `age` column for numeric values > 89, cap to `89`. Same unit-awareness as T107.
+
+### Tests
+
+- [ ] T109 [US2] Write tests for tiered migration in `tests/test_migrate.py`:
+  - `--level=safe` applies only safe rules (default behavior unchanged)
+  - `--level=advisory` applies safe + advisory rules
+  - `--level=all` includes non-auto-fixable findings in report
+  - `--rule-id=age_cap_89` applies only that specific rule
+  - `--exclude-rule=field_rename_BasedOn_to_Sources` excludes that rule
+  - `--mode=non-interactive` skips advisory prompts
+- [ ] T110 [US2] Write tests for new migration rules in `tests/test_migrate.py`:
+  - `AcquisitionDuration` renamed to `FrameAcquisitionDuration` when `VolumeTiming` present
+  - `AcquisitionDuration` flagged non-auto-fixable when `VolumeTiming` absent
+  - `DCOffsetCorrection` removed from iEEG sidecar at advisory level
+  - `HardcopyDeviceSoftwareVersion` removed at advisory level
+  - `"89+"` string converted to numeric `89` in `participants.tsv`
+  - Age with non-year units (`"Units": "months"` in `participants.json`) → rule skipped with warning
+  - HIPAA cap: numeric `92` → `89` at advisory level
+
+**Checkpoint**: `bids-utils migrate --level=advisory` applies all 1.x deprecations including field removals and HIPAA age capping. `--mode=interactive` prompts for each advisory item.
+
+---
+
+## Phase 3b: Schema Deprecation Audit (FR-033, FR-034)
+
+**Purpose**: Automated coverage tracking — ensures all schema-declared deprecations have corresponding migration rules. Catches drift as bidsschematools is updated.
+
+- [ ] T111 [US2] Implement schema deprecation scanner in `src/bids_utils/migrate.py`: function `_scan_schema_deprecations(schema)` that extracts all deprecation markers from all 6 schema levels: `rules/sidecars` field annotations, `rules/checks` validator rules, `objects/metadata` descriptions, `objects/enums` values, `objects/columns` definitions, `objects/suffixes` definitions. Returns list of `dict` with keys: `location` (schema path), `field` (affected field/suffix/enum), `description`.
+- [ ] T112 [US2] Implement `audit_schema_coverage()` library function in `src/bids_utils/migrate.py` (FR-033): compare output of `_scan_schema_deprecations()` against registered `_RULES`. Return `AuditResult` (add dataclass to `src/bids_utils/_types.py`) with `implemented`, `missing`, `schema_version`, `schema_locations_scanned`. If bidsschematools version is not latest, include recommendation to upgrade.
+- [ ] T113 [US2] Add `--audit` flag to `src/bids_utils/cli/migrate.py`: when passed, run `audit_schema_coverage()` and output report (human-readable default, `--json` for machine-readable). Exit 0 if fully covered, exit 1 if gaps found.
+- [ ] T114 [US2] Write `test_migration_coverage_vs_schema` in `tests/test_migrate.py`: loads current schema, runs audit, asserts no unimplemented deprecations. This test will fail when bidsschematools is upgraded and new deprecations appear — forcing us to add rules.
+- [ ] T115 [P] Create GitHub issue template `.github/ISSUE_TEMPLATE/missing-migration-rule.yml` (FR-034): form fields for schema version, deprecation location, affected field/suffix/enum, expected behavior. Labels: `migration`, `schema-gap`.
+
+**Checkpoint**: `bids-utils migrate --audit` reports full coverage. `test_migration_coverage_vs_schema` passes. Upgrading bidsschematools with new deprecations will fail the test until rules are added.
+
+---
+
+## Phase 3c: BIDS URI Fixup Helper (FR-025)
+
+**Purpose**: Generic helper that updates `bids:` URIs when files are renamed. Reusable across rename, migrate, subject-rename, session-rename.
+
+- [ ] T116 [P] [US2] Create `src/bids_utils/_bids_uri.py` with `update_bids_uris(dataset: BIDSDataset, old_to_new: dict[Path, Path], dry_run: bool) -> list[Change]`. Scan JSON metadata fields: `IntendedFor`, `AssociatedEmptyRoom`, `Sources`, `DerivedFrom`. Match `bids::` scheme URIs against old→new path mapping. Update matched URIs. Respect content-aware I/O (`_io.py`).
+- [ ] T117 [P] [US2] Write tests for `_bids_uri.py` in `tests/test_bids_uri.py`: single URI updated, list of URIs updated, cross-dataset URIs (`bids:ds001::...`) left unchanged, no false matches, dry-run returns changes without modifying
+- [ ] T118 [US2] Wire `update_bids_uris()` into `src/bids_utils/rename.py` after file renames — call with old→new path mapping. Wire into `subject.py`, `session.py`, `migrate.py` similarly.
+
+**Checkpoint**: Renaming a file that is referenced by `IntendedFor` in a fieldmap sidecar automatically updates the BIDS URI.
+
+---
+
 ## Phase 4: User Story 3 — Migrate toward BIDS 2.0 (Priority: P1)
 
 **Goal**: `bids-utils migrate --to 2.0` applies 2.0 breaking changes after resolving 1.x deprecations.
@@ -156,11 +227,23 @@
   - Ambiguities flagged, not guessed
 - [X] T045 [US3] Write `bids-examples` integration test: migrate 1.x datasets to 2.0, validate against 2.0 schema
 
-**Checkpoint**: Full migration path from any 1.x version to 2.0.
+**⚠ PROVISIONAL**: Tasks T041-T045 are marked complete but their implementations are necessarily preliminary — they target the current 2.0-dev schema which is not yet finalized.
 
-**Note**: Exact 2.0 transformations depend on BIDS 2.0 schema stabilization. This phase may iterate.
+### Concrete 2.0 rules (bids-standard/bids-2-devel#14)
 
-**⚠ PROVISIONAL**: Tasks T041-T045 are marked complete but their implementations are necessarily preliminary — they target the current 2.0-dev schema which is not yet finalized. These tasks will likely need re-implementation when the BIDS 2.0 schema stabilizes. Track upstream progress and re-validate.
+- [ ] T119 [US3] Register `participants.tsv` → `subjects.tsv` migration rule in `src/bids_utils/migrate.py` (FR-028). Level: `safe`. Category: `file_rename`. Handler: rename `participants.tsv` → `subjects.tsv` via VCS, rename `participants.json` → `subjects.json` via VCS, rename `participant_id` column → `subject_id` in the TSV, update `BIDSVersion` in `dataset_description.json`.
+- [ ] T120 [US3] Wire BIDS URI fixup (FR-025/T118) into the participants→subjects migration: after file rename, call `update_bids_uris()` with `{participants.tsv: subjects.tsv}` mapping to update any `bids:` URIs referencing the old file.
+- [ ] T121 [US3] Write tests for participants→subjects migration in `tests/test_migrate.py`:
+  - `participants.tsv` renamed to `subjects.tsv`
+  - `participants.json` renamed to `subjects.json`
+  - `participant_id` column renamed to `subject_id`
+  - `BIDSVersion` updated in `dataset_description.json`
+  - BIDS URIs referencing `participants.tsv` updated to `subjects.tsv`
+  - Dry-run lists all changes without modifying
+  - Already at 2.0 → "nothing to do"
+- [ ] T122 [US3] Update `src/bids_utils/_participants.py` to support both `participants.tsv` and `subjects.tsv` filenames — detect which exists and operate accordingly. This ensures post-migration commands (subject-rename, remove) work on 2.0 datasets.
+
+**Checkpoint**: Full migration path from any 1.x version to 2.0 including participants→subjects rename.
 
 ---
 
@@ -353,7 +436,10 @@
 - **Phase 1c (Symlink Safety & Dry-Run Detail / FR-003, FR-023, FR-024)**: Depends on Phase 1b. BLOCKS real-world usage on annexed datasets — the symlink bug causes silent data loss (files not renamed). Should be done immediately after Phase 1b.
 - **Phase 2 (Rename / US1)**: Depends on Phase 1
 - **Phase 3 (Migrate 1.x / US2)**: Depends on Phase 2 (uses rename for suffix changes)
-- **Phase 4 (Migrate 2.0 / US3)**: Depends on Phase 3
+- **Phase 3a (Migration Rule Schema / FR-029, FR-030)**: Depends on Phase 3 (extends existing migrate.py)
+- **Phase 3b (Schema Audit / FR-033, FR-034)**: Depends on Phase 3a (needs level field and rule registry)
+- **Phase 3c (BIDS URI Fixup / FR-025)**: Depends on Phase 1 (independent of migrate, but blocks Phase 4 concrete rules)
+- **Phase 4 (Migrate 2.0 / US3)**: Depends on Phase 3a + Phase 3c (needs tiered levels and URI fixup for participants→subjects)
 - **Phase 5 (Subject rename / US4)**: Depends on Phase 2
 - **Phase 6 (Session rename / US5)**: Depends on Phase 2
 - **Phase 7 (Metadata / US6)**: Depends on Phase 1 (independent of rename/migrate)
@@ -363,15 +449,23 @@
 - **Phase 11 (Completion / FR-019-021)**: Depends on Phase 1 (uses `_dataset.py`, `_schema.py`)
 - **Phase 12 (Polish)**: Depends on all desired phases being complete
 
-### Parallel Opportunities After Phase 1
-
-Once Phase 1 is complete, the following can proceed in parallel:
+### Parallel Opportunities After Phase 3
 
 ```
-Phase 2 (Rename)  ─→  Phase 3 (Migrate 1.x)  ─→  Phase 4 (Migrate 2.0)
+Phase 3 (Migrate 1.x)  ─→  Phase 3a (Rule Schema)  ─→  Phase 3b (Audit)
+                                                     ─→  Phase 4 (Migrate 2.0)
+Phase 3c (URI Fixup) can start after Phase 1 (parallel with Phase 2/3)
+Phase 3c BLOCKS Phase 4 concrete rules (participants→subjects needs URI fixup)
+```
+
+Earlier parallel opportunities (after Phase 1) remain:
+
+```
+Phase 2 (Rename)  ─→  Phase 3 (Migrate 1.x)  ─→  Phase 3a ─→ Phase 3b, Phase 4
                   ─→  Phase 5 (Subject)       ─→  Phase 9 (Merge)
                   ─→  Phase 6 (Session)       ─→
                   ─→  Phase 8 (Remove)
+Phase 3c (URI Fixup) can start after Phase 1 (parallel with everything)
 Phase 7 (Metadata) can start immediately after Phase 1
 Phase 10 (Split) can start immediately after Phase 1
 Phase 11 (Completion) can start immediately after Phase 1
@@ -397,7 +491,10 @@ Phase 11 (Completion) can start immediately after Phase 1
 ### Incremental Delivery
 
 Each subsequent phase adds value without breaking prior phases:
-- Phase 4 adds 2.0 migration
+- Phase 3a adds tiered migration levels (safe/advisory/non-auto-fixable)
+- Phase 3b adds schema audit (catches drift when bidsschematools updates)
+- Phase 3c adds BIDS URI fixup (reusable across all rename operations)
+- Phase 4 adds concrete 2.0 migration (participants→subjects)
 - Phases 5-6 add subject/session rename
 - Phase 7 adds metadata management
 - Phases 8-10 add remove/merge/split

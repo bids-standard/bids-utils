@@ -84,9 +84,22 @@ def migrate_dataset(
     dataset: BIDSDataset,
     *,
     to_version: str | None = None,  # None = current released
+    level: MigrationLevel = MigrationLevel.SAFE,
+    mode: MigrationMode = MigrationMode.AUTO,
+    rule_ids: list[str] | None = None,      # Include only these rules (None = all at level)
+    exclude_rules: list[str] | None = None,  # Exclude these rule IDs
     dry_run: bool = False,
 ) -> MigrationResult:
-    """Apply schema-driven migrations."""
+    """Apply schema-driven migrations filtered by level and rule selection."""
+
+def audit_schema_coverage(
+    schema_version: str | None = None,
+) -> AuditResult:
+    """Compare registered migration rules against schema deprecation markers (FR-033).
+
+    Scans all schema levels: rules/sidecars, rules/checks, objects/metadata,
+    objects/enums, objects/columns, objects/suffixes.
+    Reports unimplemented deprecations."""
 ```
 
 ### `bids_utils.metadata`
@@ -219,6 +232,14 @@ Per-command common options:
 - `--force`: Skip confirmation on destructive operations
 - `--include-sourcedata`: Extend operation to `sourcedata/` and `.heudiconv/`
 - `--schema-version VERSION`: Override detected schema version
+
+Migrate-specific options:
+- `--to VERSION`: Target BIDS version (default: current released 1.x)
+- `--level safe|advisory|all`: Migration tier filter (default: `safe`)
+- `--mode auto|non-interactive|interactive`: Interaction behavior (default: `auto`)
+- `--rule-id ID`: Include only this rule (repeatable)
+- `--exclude-rule ID`: Exclude this rule (repeatable)
+- `--audit`: Compare registered rules against schema deprecation markers and report gaps
 
 Exit codes:
 - 0: Success
