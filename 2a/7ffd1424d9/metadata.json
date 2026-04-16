@@ -1,0 +1,33 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "2a7ffd1424d9",
+  "strategy": "manual-commit",
+  "branch": "00-initial-design",
+  "checkpoints_count": 3,
+  "files_touched": [
+    ".jscpd.json",
+    ".specify/specs/00-initial-design.md",
+    "src/bids_utils/_io.py",
+    "src/bids_utils/_sidecars.py",
+    "src/bids_utils/migrate.py",
+    "tests/conftest.py",
+    "tests/integration/test_bids_examples.py",
+    "tools/check-duplication.sh",
+    "tox.ini"
+  ],
+  "sessions": [
+    {
+      "metadata": "/2a/7ffd1424d9/0/metadata.json",
+      "transcript": "/2a/7ffd1424d9/0/full.jsonl",
+      "content_hash": "/2a/7ffd1424d9/0/content_hash.txt",
+      "prompt": "/2a/7ffd1424d9/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 374,
+    "cache_creation_tokens": 1497435,
+    "cache_read_tokens": 61259873,
+    "output_tokens": 99028,
+    "api_call_count": 329
+  }
+}

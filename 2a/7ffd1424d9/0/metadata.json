@@ -1,0 +1,45 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "2a7ffd1424d9",
+  "session_id": "4700598a-e9bb-4598-84bc-9e51c037c5f9",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-16T21:59:24.904986265Z",
+  "branch": "00-initial-design",
+  "checkpoints_count": 3,
+  "files_touched": [
+    ".jscpd.json",
+    ".specify/specs/00-initial-design.md",
+    "src/bids_utils/_io.py",
+    "src/bids_utils/_sidecars.py",
+    "src/bids_utils/migrate.py",
+    "tests/conftest.py",
+    "tests/integration/test_bids_examples.py",
+    "tools/check-duplication.sh",
+    "tox.ini"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-6[1m]",
+  "turn_id": "df746647cc62",
+  "token_usage": {
+    "input_tokens": 374,
+    "cache_creation_tokens": 1497435,
+    "cache_read_tokens": 61259873,
+    "output_tokens": 99028,
+    "api_call_count": 329
+  },
+  "session_metrics": {
+    "turn_count": 19
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-16T21:59:23.689492893Z",
+    "agent_lines": 116,
+    "agent_removed": 64,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 116,
+    "total_lines_changed": 180,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}
