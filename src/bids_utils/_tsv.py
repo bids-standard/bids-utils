@@ -27,7 +27,7 @@ def read_tsv(
 
         ensure_content(path, vcs, annexed_mode)
 
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8-sig")
     reader = csv.DictReader(StringIO(text), delimiter="\t")
     return list(reader)
 
