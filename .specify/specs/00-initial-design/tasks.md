@@ -144,33 +144,33 @@
 
 ### Migration rule schema (FR-029)
 
-- [ ] T099 [US2] Add `level` field (`safe` | `advisory` | `non-auto-fixable`) to `MigrationRule` dataclass in `src/bids_utils/migrate.py`. Add `MigrationLevel` enum to `src/bids_utils/_types.py`. Assign `level` to all existing registered rules: field renames → `safe`, enum renames → `safe`, path format → `safe`, DOI → `safe`, ScanDate cross-file move → `safe`, suffix _phase → `safe`, ambiguous suffixes (T2star, FLASH, PD) → `non-auto-fixable`, deprecated templates → `non-auto-fixable`.
-- [ ] T100 [P] [US2] Add `condition` field (optional `Callable[..., bool]`) to `MigrationRule` for contextual guards. Not wired to any rule yet — infrastructure only. Update `_scan_*` functions to call `rule.condition(context)` if present and skip the rule if it returns `False`.
+- [X] T099 [US2] Add `level` field (`safe` | `advisory` | `non-auto-fixable`) to `MigrationRule` dataclass in `src/bids_utils/migrate.py`. Add `MigrationLevel` enum to `src/bids_utils/_types.py`. Assign `level` to all existing registered rules: field renames → `safe`, enum renames → `safe`, path format → `safe`, DOI → `safe`, ScanDate cross-file move → `safe`, suffix _phase → `safe`, ambiguous suffixes (T2star, FLASH, PD) → `non-auto-fixable`, deprecated templates → `non-auto-fixable`.
+- [X] T100 [P] [US2] Add `condition` field (optional `Callable[..., bool]`) to `MigrationRule` for contextual guards. Not wired to any rule yet — infrastructure only. Update `_scan_*` functions to call `rule.condition(context)` if present and skip the rule if it returns `False`.
 
 ### CLI filtering (FR-030)
 
-- [ ] T101 [US2] Add `MigrationMode` enum (`auto`, `non-interactive`, `interactive`) to `src/bids_utils/_types.py`. Add `level`, `mode`, `rule_ids`, `exclude_rules` parameters to `migrate_dataset()` in `src/bids_utils/migrate.py`. Filter registered rules by level (cumulative: `advisory` includes `safe`; `all` includes everything). Filter by `rule_ids`/`exclude_rules` if provided.
-- [ ] T102 [US2] Update `src/bids_utils/cli/migrate.py`: add `--level` (choice: safe/advisory/all, default: safe), `--mode` (choice: auto/non-interactive/interactive, default: auto), `--rule-id` (multiple, str), `--exclude-rule` (multiple, str) click options. Wire to `migrate_dataset()` parameters.
-- [ ] T103 [US2] Implement interactive mode in `migrate_dataset()`: when `mode=interactive` or `mode=auto` with PTY detected, prompt user for each `advisory` or `non-auto-fixable` finding. Accept/skip/abort. When `mode=non-interactive`, apply only auto-fixable rules at the selected level, skip others silently.
+- [X] T101 [US2] Add `MigrationMode` enum (`auto`, `non-interactive`, `interactive`) to `src/bids_utils/_types.py`. Add `level`, `mode`, `rule_ids`, `exclude_rules` parameters to `migrate_dataset()` in `src/bids_utils/migrate.py`. Filter registered rules by level (cumulative: `advisory` includes `safe`; `all` includes everything). Filter by `rule_ids`/`exclude_rules` if provided.
+- [X] T102 [US2] Update `src/bids_utils/cli/migrate.py`: add `--level` (choice: safe/advisory/all, default: safe), `--mode` (choice: auto/non-interactive/interactive, default: auto), `--rule-id` (multiple, str), `--exclude-rule` (multiple, str) click options. Wire to `migrate_dataset()` parameters.
+- [ ] T103 [US2] *(deferred)* Implement interactive mode in `migrate_dataset()`: when `mode=interactive` or `mode=auto` with PTY detected, prompt user for each `advisory` or `non-auto-fixable` finding. Accept/skip/abort. When `mode=non-interactive`, apply only auto-fixable rules at the selected level, skip others silently.
 
 ### New 1.x migration rules
 
-- [ ] T104 [US2] Register `AcquisitionDuration` → `FrameAcquisitionDuration` migration rule in `src/bids_utils/migrate.py` (FR-026). Level: `safe`. Condition: `VolumeTiming` must be present in the same sidecar JSON. Implement handler: scan BOLD/ASL sidecars, check condition, rename field. When `AcquisitionDuration` exists without `VolumeTiming`, register a separate finding as `non-auto-fixable` with clear reason.
-- [ ] T105 [P] [US2] Register `DCOffsetCorrection` field removal rule in `src/bids_utils/migrate.py` (FR-031). Level: `advisory`. Scope: iEEG sidecars. Handler: remove the field from JSON sidecar. Warn about data loss.
-- [ ] T106 [P] [US2] Register `HardcopyDeviceSoftwareVersion` field removal rule in `src/bids_utils/migrate.py` (FR-032). Level: `advisory`. Scope: MRI sidecars. Handler: remove the field. Warn about data loss.
-- [ ] T107 [US2] Register age `"89+"` string → numeric `89` rule in `src/bids_utils/migrate.py` (FR-027). Level: `safe`. Handler: scan `participants.tsv` `age` column for `"89+"` string values. **Unit-aware**: read `participants.json` sidecar, check if `"Units"` is defined for `age`; if non-year units, skip with warning. Convert matched strings to numeric `89`.
-- [ ] T108 [P] [US2] Register HIPAA age cap rule (id: `age_cap_89`) in `src/bids_utils/migrate.py` (FR-027). Level: `advisory`. Handler: scan `participants.tsv` `age` column for numeric values > 89, cap to `89`. Same unit-awareness as T107.
+- [X] T104 [US2] Register `AcquisitionDuration` → `FrameAcquisitionDuration` migration rule in `src/bids_utils/migrate.py` (FR-026). Level: `safe`. Condition: `VolumeTiming` must be present in the same sidecar JSON. Implement handler: scan BOLD/ASL sidecars, check condition, rename field. When `AcquisitionDuration` exists without `VolumeTiming`, register a separate finding as `non-auto-fixable` with clear reason.
+- [X] T105 [P] [US2] Register `DCOffsetCorrection` field removal rule in `src/bids_utils/migrate.py` (FR-031). Level: `advisory`. Scope: iEEG sidecars. Handler: remove the field from JSON sidecar. Warn about data loss.
+- [X] T106 [P] [US2] Register `HardcopyDeviceSoftwareVersion` field removal rule in `src/bids_utils/migrate.py` (FR-032). Level: `advisory`. Scope: MRI sidecars. Handler: remove the field. Warn about data loss.
+- [X] T107 [US2] Register age `"89+"` string → numeric `89` rule in `src/bids_utils/migrate.py` (FR-027). Level: `safe`. Handler: scan `participants.tsv` `age` column for `"89+"` string values. **Unit-aware**: read `participants.json` sidecar, check if `"Units"` is defined for `age`; if non-year units, skip with warning. Convert matched strings to numeric `89`.
+- [X] T108 [P] [US2] Register HIPAA age cap rule (id: `age_cap_89`) in `src/bids_utils/migrate.py` (FR-027). Level: `advisory`. Handler: scan `participants.tsv` `age` column for numeric values > 89, cap to `89`. Same unit-awareness as T107.
 
 ### Tests
 
-- [ ] T109 [US2] Write tests for tiered migration in `tests/test_migrate.py`:
+- [X] T109 [US2] Write tests for tiered migration in `tests/test_migrate.py`:
   - `--level=safe` applies only safe rules (default behavior unchanged)
   - `--level=advisory` applies safe + advisory rules
   - `--level=all` includes non-auto-fixable findings in report
   - `--rule-id=age_cap_89` applies only that specific rule
   - `--exclude-rule=field_rename_BasedOn_to_Sources` excludes that rule
   - `--mode=non-interactive` skips advisory prompts
-- [ ] T110 [US2] Write tests for new migration rules in `tests/test_migrate.py`:
+- [X] T110 [US2] Write tests for new migration rules in `tests/test_migrate.py`:
   - `AcquisitionDuration` renamed to `FrameAcquisitionDuration` when `VolumeTiming` present
   - `AcquisitionDuration` flagged non-auto-fixable when `VolumeTiming` absent
   - `DCOffsetCorrection` removed from iEEG sidecar at advisory level
