@@ -23,6 +23,11 @@ their research data, and breaking a dataset is unacceptable.
   unless `--force` is passed.
 - When in doubt about correctness, refuse to act and explain why. It is always
   better to abort with a clear message than to silently corrupt data.
+- **Fail loudly, never degrade silently.** If a mandated tool or check is
+  unavailable (e.g., `jscpd` not installed, validator crashes), the operation
+  MUST fail with a clear error — never emit a "warning" and continue as if
+  the check passed. Warnings that mask missing checks are worse than errors
+  because they create a false sense of compliance.
 - Before modifying any file, verify the dataset's structural integrity for the
   affected entities (not necessarily a full validation, but targeted checks).
 

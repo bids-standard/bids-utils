@@ -784,7 +784,19 @@ def _scan_for_age_column(
         age_meta = sidecar.get("age", {})
         units = age_meta.get("Units", "")
         if units and units.lower() not in ("year", "years", ""):
-            # Non-year units — skip with warning
+            # Non-year units — produce a non-auto-fixable finding
+            # so the user knows WHY the rule was skipped
+            findings.append(
+                MigrationFinding(
+                    rule=rule,
+                    file=participants_tsv,
+                    current_value=f"age column units={units}",
+                    proposed_value="skipped (89-year threshold applies to years only)",
+                    can_auto_fix=False,
+                    reason=f"Age column has units '{units}' — 89-year threshold "
+                    "does not apply to non-year units",
+                )
+            )
             return findings
 
     for i, row in enumerate(rows):

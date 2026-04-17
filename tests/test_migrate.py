@@ -880,7 +880,10 @@ class TestAge89:
         age_findings = [
             f for f in result.findings if "age" in f.rule.id
         ]
-        assert not age_findings
+        # Should have a non-auto-fixable finding explaining the skip
+        assert len(age_findings) == 1
+        assert not age_findings[0].can_auto_fix
+        assert "non-year" in (age_findings[0].reason or "").lower()
 
         # Value unchanged
         text = participants.read_text()
