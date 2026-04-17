@@ -110,3 +110,7 @@ so checklist is incorrectly marked imho -- pylint is not enough for duplication 
 <status>completed</status>
 <summary>Background command "uv run pytest tests/ -q --timeout=600 2&gt;&amp;1 | tail -5" completed (exit code 0)</summary>
 </task-notification>
+
+---
+
+"echo "WARNING: npx not found — skipping jscpd check. Install Node.js for full duplication detection."" -- NO.  There should be no warning -- there should be error if we have specified to test duplication with jscpd and it is not installed, that is a violation of constitution AFAIK.  Go and analyze ALL warnings issued, and where necessary -- reflect in constitution that we should operate consistently and to not let errors which needed to be addressed, to go unnoticed with some warning issued.
