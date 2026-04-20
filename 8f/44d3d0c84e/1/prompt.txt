@@ -1,0 +1,37 @@
+/speckit.analyze
+
+---
+
+oh -- you found it finally. yes -- run .claude/skills/speckit-analyze/SKILL.md
+
+---
+
+F1: AFAIK it is a correct mapping according to e.g. CHANGES entry  src/CHANGES.md:-   \[MISC] deprecate DCOffsetCorrection field from ieeg.json: Use SoftwareFilters field instead [#799](https://github.com/bids-standard/bids-specification/pull/799)
+
+but indeed description should be adjusted -- it might be not just a "rename" but rather migration to a new type of record, e.g the value could be moved into `"SoftwareFilters": { "DCOffsetCorrection": {"description": VALUE} }` (note that SoftwareFilters might be already defined so it should be appended then)
+
+Adjust your analysis/response with that in mind. 
+
+similar anlysis should be done for other "renames"!  bids-examples dataset is a great resource to check for typical examples to expect (can just `git grep` within it) -- a good strategy to encode in CLAUDE.md or elsewhere where looking for typical uses of a particular value.
+
+---
+
+F1: AFAIK it is a correct mapping according to e.g. CHANGES entry  src/CHANGES.md:-   \[MISC] deprecate DCOffsetCorrection field from ieeg.json: Use SoftwareFilters field instead [#799](https://github.com/bids-standard/bids-specification/pull/799)
+
+but indeed description should be adjusted -- it might be not just a "rename" but rather migration to a new type of record, e.g the value could be moved into `"SoftwareFilters": { "DCOffsetCorrection": {"description": VALUE} }` (note that SoftwareFilters might be already defined so it should be appended then)
+
+Adjust your analysis/response with that in mind. 
+
+similar anlysis should be done for other "renames"!  bids-examples dataset is a great resource to check for typical examples to expect (can just `git grep` within it) -- a good strategy to encode in CLAUDE.md or elsewhere where looking for typical uses of a particular value.
+
+---
+
+in above [X] means that they were already implemented according to old or new formulation?  shouldn't it be reimplemented if implemented to old?
+
+---
+
+run subagent to verify if "implemented correctly" or those items need to be adjusted too
+
+---
+
+yes
