@@ -1,9 +1,9 @@
 # Feature Specification: bids-utils — Core Library & CLI
 
-**Feature Branch**: `00-initial-design`
+**Feature Branch**: `000-initial-design`
 **Created**: 2026-04-02
 **Status**: Draft
-**Input**: User description: "Build a Python application/library following what is described in docs/design/00-initial-design.md file"
+**Input**: User description: "Build a Python application/library following what is described in docs/design/000-initial-design.md file"
 
 ## User Scenarios & Testing *(mandatory)*
 
