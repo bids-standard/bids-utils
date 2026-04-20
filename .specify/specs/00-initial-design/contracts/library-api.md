@@ -169,9 +169,15 @@ def merge_datasets(
     *,
     into_sessions: list[str] | None = None,
     on_conflict: Literal["error", "add-runs"] = "error",
+    reconcile_metadata: bool = False,
     dry_run: bool = False,
 ) -> OperationResult:
-    """Merge multiple BIDS datasets."""
+    """Merge multiple BIDS datasets.
+
+    When reconcile_metadata=True, conflicting top-level sidecar metadata
+    is segregated down to the appropriate level and re-aggregated to produce
+    correct inheritance (see US9 acceptance scenario 6).
+    """
 ```
 
 ### `bids_utils._vcs.VCSBackend` (Protocol)

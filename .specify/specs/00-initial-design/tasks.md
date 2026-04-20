@@ -36,6 +36,7 @@
 
 - [X] T011 Implement `src/bids_utils/_types.py`: `Entity` (frozen dataclass: key+value), `BIDSPath` (entities dict, suffix, extension, datatype; `from_path()`, `to_filename()`, `to_relative_path()`, `with_entities()`, `with_suffix()`, `with_extension()`), `OperationResult`, `Change` dataclasses per data-model.md
 - [X] T012 [P] Write tests for `_types.py` in `tests/test_types.py` — entity parsing, filename round-tripping, `BIDSPath.from_path()` with various BIDS filenames
+- [ ] T123 [US1] Fix `BIDSPath.to_filename()` in `src/bids_utils/_types.py` to emit entities in schema-defined order (FR-035). When a `BIDSSchema` is available, `to_filename()` MUST reorder entities according to `BIDSSchema.entity_order()` before assembling the filename. Without a schema, preserve insertion order (best-effort). Add test in `tests/test_types.py`: `BIDSPath(entities={"sub":"01","task":"rest","run":"99","recording":"bipolar"}).to_filename(schema=...)` produces entities in schema order, not insertion order.
 - [X] T013 Implement `src/bids_utils/_dataset.py`: `BIDSDataset` dataclass (`root`, `bids_version`, `schema_version`, `vcs`), `BIDSDataset.from_path()` (walk up to find `dataset_description.json`), read `BIDSVersion`
 - [X] T014 [P] Write tests for `_dataset.py` in `tests/test_dataset.py` — discovery from nested paths, missing `dataset_description.json`, version extraction
 - [X] T015 Implement `src/bids_utils/_schema.py`: `BIDSSchema` class wrapping `bidsschematools.schema.load_schema()` — load by version, `entity_order()`, `sidecar_extensions(suffix)`, `is_valid_entity()`, `deprecation_rules(from_ver, to_ver)`, `metadata_field_info()`
@@ -115,11 +116,11 @@
 ### Implementation for User Story 2
 
 - [X] T031 [US2] Implement migration rule engine in `src/bids_utils/migrate.py`: `MigrationRule`, `MigrationPlan`, `MigrationFinding` dataclasses per data-model.md; migration registry (decorator-based, adapted from PR #2282 pattern); load deprecation rules from schema (`rules/checks/deprecations.yml`, `objects/metadata.yaml`, `objects/enums.yaml`)
-- [X] T032 [US2] Implement metadata field rename handler: `BasedOn` → `Sources`, `RawSources` → `Sources`, `ScanDate` → `acq_time` in `_scans.tsv`, `DCOffsetCorrection` → `SoftwareFilters`, `AcquisitionDuration` → `FrameAcquisitionDuration`
+- [ ] T032 [US2] Implement metadata field rename handler: `BasedOn` → `Sources`, `RawSources` → `Sources`. Merge logic MUST handle: (a) existing `Sources` as string + incoming value as array (normalize to array first), (b) both `BasedOn` AND `RawSources` present alongside existing `Sources` (3-way merge). Add tests for mixed-type merge and 3-way merge scenarios. (Note: `ScanDate` handled by T036; `DCOffsetCorrection` by T105; `AcquisitionDuration` by T104.) *(Reimplementation needed: current merge logic broken for mixed string/array types.)*
 - [X] T033 [US2] Implement value format change handler: relative paths → BIDS URIs in `IntendedFor`, `AssociatedEmptyRoom`, `Sources`; `DatasetDOI` bare DOIs → URI format
 - [X] T034 [US2] Implement suffix deprecation handler: `_phase` → `_part-phase_bold`; deprecated anat suffixes `T2star`, `FLASH`, `PD` (delegates to `rename_file()`)
 - [X] T035 [US2] Implement enum value rename handler: `ElektaNeuromag` → `NeuromagElektaMEGIN`, deprecated template identifiers (`fsaverage3`–`fsaverage6`, `fsaveragesym`, versioned `UNCInfant*`)
-- [X] T036 [US2] Implement cross-file move handler: `ScanDate` from JSON sidecar → `acq_time` column in `_scans.tsv` (create `_scans.tsv` if needed)
+- [ ] T036 [US2] Implement cross-file move handler: `ScanDate` from JSON sidecar → `acq_time` column in `_scans.tsv`. MUST create `_scans.tsv` with appropriate headers if it does not exist — current implementation silently skips the TSV write when the file is missing, causing data loss (`ScanDate` removed from JSON but never written to TSV). Add test for missing-`_scans.tsv` scenario. *(Reimplementation needed: data loss bug.)*
 - [X] T037 [US2] Implement `migrate_dataset()` orchestrator: determine dataset version, determine target version (default: current released 1.x), compute applicable rules between versions, scan dataset for findings, apply auto-fixable findings, report unfixable ones
 - [X] T038 [US2] Write tests for `migrate.py` in `tests/test_migrate.py`:
   - Metadata field renames applied correctly
@@ -133,6 +134,7 @@
   - `--to 1.9.0` applies only up-to-1.9.0 deprecations
 - [X] T039 [US2] Implement `src/bids_utils/cli/migrate.py`: click command with `--to VERSION`, `--dry-run`, `--json`
 - [X] T040 [US2] Write `bids-examples` integration test: find datasets with older `BIDSVersion`, migrate, validate
+- [ ] T125 [US2] Document migration rule test matrix in `tests/test_migrate.py` header comment: which rules have bids-examples test data (`IntendedFor`, `AssociatedEmptyRoom`, `ElektaNeuromag`, `SoftwareFilters`, `RawSources`, `DatasetDOI`, `AcquisitionDuration`) vs. which need synthetic fixtures (`DCOffsetCorrection`, `BasedOn`, `ScanDate`, `HardcopyDeviceSoftwareVersion`, `_phase` suffix, `"89+"` age, `fsaverage3-6`/`fsaveragesym`/`UNCInfant` templates). Ensure T038 tests cover both categories.
 
 **Checkpoint**: `bids-utils migrate` handles all 1.x deprecations schema-driven.
 
@@ -151,12 +153,12 @@
 
 - [X] T101 [US2] Add `MigrationMode` enum (`auto`, `non-interactive`, `interactive`) to `src/bids_utils/_types.py`. Add `level`, `mode`, `rule_ids`, `exclude_rules` parameters to `migrate_dataset()` in `src/bids_utils/migrate.py`. Filter registered rules by level (cumulative: `advisory` includes `safe`; `all` includes everything). Filter by `rule_ids`/`exclude_rules` if provided.
 - [X] T102 [US2] Update `src/bids_utils/cli/migrate.py`: add `--level` (choice: safe/advisory/all, default: safe), `--mode` (choice: auto/non-interactive/interactive, default: auto), `--rule-id` (multiple, str), `--exclude-rule` (multiple, str) click options. Wire to `migrate_dataset()` parameters.
-- [ ] T103 [US2] *(deferred)* Implement interactive mode in `migrate_dataset()`: when `mode=interactive` or `mode=auto` with PTY detected, prompt user for each `advisory` or `non-auto-fixable` finding. Accept/skip/abort. When `mode=non-interactive`, apply only auto-fixable rules at the selected level, skip others silently.
+- [ ] T103 [US2] *(post-MVP)* Implement interactive mode in `migrate_dataset()`: when `mode=interactive` or `mode=auto` with PTY detected, prompt user for each `advisory` or `non-auto-fixable` finding. Accept/skip/abort. When `mode=non-interactive`, apply only auto-fixable rules at the selected level, skip others silently.
 
 ### New 1.x migration rules
 
 - [X] T104 [US2] Register `AcquisitionDuration` → `FrameAcquisitionDuration` migration rule in `src/bids_utils/migrate.py` (FR-026). Level: `safe`. Condition: `VolumeTiming` must be present in the same sidecar JSON. Implement handler: scan BOLD/ASL sidecars, check condition, rename field. When `AcquisitionDuration` exists without `VolumeTiming`, register a separate finding as `non-auto-fixable` with clear reason.
-- [X] T105 [P] [US2] Register `DCOffsetCorrection` field removal rule in `src/bids_utils/migrate.py` (FR-031). Level: `advisory`. Scope: iEEG sidecars. Handler: remove the field from JSON sidecar. Warn about data loss.
+- [ ] T105 [P] [US2] Register `DCOffsetCorrection` → `SoftwareFilters` structural migration rule in `src/bids_utils/migrate.py` (FR-031). Level: `safe`. Scope: iEEG sidecars. Handler: move `DCOffsetCorrection` value into `"SoftwareFilters": {"DCOffsetCorrection": {"description": VALUE}}`; merge into existing `SoftwareFilters` dict if present; remove original `DCOffsetCorrection` field. Add tests for: standalone DCOffsetCorrection, DCOffsetCorrection with pre-existing SoftwareFilters dict. *(Reimplementation needed: current code removes field instead of migrating to SoftwareFilters.)*
 - [X] T106 [P] [US2] Register `HardcopyDeviceSoftwareVersion` field removal rule in `src/bids_utils/migrate.py` (FR-032). Level: `advisory`. Scope: MRI sidecars. Handler: remove the field. Warn about data loss.
 - [X] T107 [US2] Register age `"89+"` string → numeric `89` rule in `src/bids_utils/migrate.py` (FR-027). Level: `safe`. Handler: scan `participants.tsv` `age` column for `"89+"` string values. **Unit-aware**: read `participants.json` sidecar, check if `"Units"` is defined for `age`; if non-year units, skip with warning. Convert matched strings to numeric `89`.
 - [X] T108 [P] [US2] Register HIPAA age cap rule (id: `age_cap_89`) in `src/bids_utils/migrate.py` (FR-027). Level: `advisory`. Handler: scan `participants.tsv` `age` column for numeric values > 89, cap to `89`. Same unit-awareness as T107.
@@ -394,6 +396,7 @@
 - [X] T092 Replace all bare `path.is_file()` calls used for file iteration with `not path.is_dir()` (or `path.is_file() or path.is_symlink()`) in: `session.py` (2 sites), `subject.py` (2 sites), `run.py` (2 sites), `split.py` (1 site), `merge.py` (1 site), `_sidecars.py` (1 site), `migrate.py` (1 site). Preserve `is_file()` where semantically correct (e.g., `_dataset.py` checking `dataset_description.json` existence, `_scans.py` checking `_scans.tsv` existence — these are never annexed).
 - [X] T093 Add `tmp_annex_dataset` pytest fixture in `tests/conftest.py`: creates a git-annex repo with locked (symlinked) data files (`.nii.gz`) alongside regular git files (`.json`, `.tsv`). Requires `git annex` to be installed (mark tests `skipif` otherwise).
 - [X] T094 Write regression tests using `tmp_annex_dataset` for session-rename, subject-rename, and rename — verify that ALL files (including annexed symlinks) are renamed correctly (SC-008). Test both with content present and content absent.
+- [ ] T124 [US4,US5] Implement `_is_bids_data_entry(path: Path) -> bool` helper in `src/bids_utils/_types.py` (FR-036). Returns `True` for: (a) regular files, (b) symlinks (annexed files per FR-023), (c) directories matching BIDS data directory patterns (`.ds`, `.zarr`, `.ome.zarr`). Replace all `not path.is_dir()` file iteration filters (introduced by T092) with `_is_bids_data_entry()` in: `session.py`, `subject.py`, `run.py`, `split.py`, `merge.py`, `_sidecars.py`, `migrate.py`. Add test with mock `.ds` directory — verify it is included in rename operations.
 
 ### Enhanced dry-run (FR-003 update)
 
