@@ -1,6 +1,6 @@
 # Data Model: bids-utils
 
-**Branch**: `00-initial-design` | **Date**: 2026-04-03
+**Branch**: `000-initial-design` | **Date**: 2026-04-03
 
 ## Core Types
 

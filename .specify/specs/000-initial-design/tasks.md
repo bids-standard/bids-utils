@@ -1,7 +1,7 @@
 # Tasks: bids-utils — Core Library & CLI
 
-**Input**: Design documents from `/specs/00-initial-design/`
-**Prerequisites**: plan.md, spec (00-initial-design.md), research.md, data-model.md, contracts/library-api.md
+**Input**: Design documents from `/specs/000-initial-design/`
+**Prerequisites**: plan.md, spec (000-initial-design.md), research.md, data-model.md, contracts/library-api.md
 
 ## Format: `[ID] [P?] [Story] Description`
 

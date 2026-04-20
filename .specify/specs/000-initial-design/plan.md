@@ -1,7 +1,7 @@
 # Implementation Plan: bids-utils — Core Library & CLI
 
-**Branch**: `00-initial-design` | **Date**: 2026-04-03 | **Spec**: [00-initial-design.md](../00-initial-design.md)
-**Input**: Feature specification from `.specify/specs/00-initial-design.md`
+**Branch**: `000-initial-design` | **Date**: 2026-04-03 | **Spec**: [000-initial-design.md](../000-initial-design.md)
+**Input**: Feature specification from `.specify/specs/000-initial-design.md`
 
 ## Summary
 
@@ -43,7 +43,7 @@ Build `bids-utils`, a Python library and CLI for manipulating BIDS datasets. Cor
 ### Documentation (this feature)
 
 ```text
-.specify/specs/00-initial-design/
+.specify/specs/000-initial-design/
 ├── plan.md              # This file
 ├── research.md          # Prior art & ecosystem analysis
 ├── data-model.md        # Core data model design

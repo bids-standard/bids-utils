@@ -1,6 +1,6 @@
 # Research: bids-utils — Prior Art & Ecosystem Analysis
 
-**Branch**: `00-initial-design` | **Date**: 2026-04-03
+**Branch**: `000-initial-design` | **Date**: 2026-04-03
 
 ## 1. Migration Prototypes
 
