@@ -1,6 +1,6 @@
 # Quickstart: bids-utils
 
-**Branch**: `00-initial-design` | **Date**: 2026-04-03
+**Branch**: `000-initial-design` | **Date**: 2026-04-03
 
 ## Installation
 
@@ -36,17 +36,29 @@ bids-utils rename sub-01/func/sub-01_task-rest_bold.nii.gz --set task=nback --js
 ### Migrate a dataset
 
 ```bash
-# Apply all 1.x deprecation fixes (default: current released version)
+# Apply safe 1.x deprecation fixes (default: --level=safe)
 bids-utils migrate
+
+# Include advisory fixes (field removals, HIPAA age capping)
+bids-utils migrate --level=advisory
+
+# Apply only a specific rule
+bids-utils migrate --level=advisory --rule-id=age_cap_89
+
+# Interactive mode: prompt for each advisory/ambiguous finding
+bids-utils migrate --level=all --mode=interactive
 
 # Migrate to a specific version
 bids-utils migrate --to 1.9.0
 
-# Migrate toward BIDS 2.0
+# Migrate toward BIDS 2.0 (participants.tsv → subjects.tsv, etc.)
 bids-utils migrate --to 2.0
 
 # Preview migration plan
 bids-utils migrate --dry-run
+
+# Audit: check for schema deprecations missing migration rules
+bids-utils migrate --audit
 ```
 
 ### Rename a subject

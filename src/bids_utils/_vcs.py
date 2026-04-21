@@ -171,15 +171,17 @@ class GitAnnex:
             self._run_annex("add", *[str(p) for p in paths])
 
 
-class DataLad:
-    """DataLad-aware operations."""
+class DataLad(GitAnnex):
+    """DataLad-aware operations.
+
+    Inherits move/remove/is_dirty/commit/has_content/add from :class:`GitAnnex`
+    (all of which ultimately delegate to ``git`` or ``git annex``).  Only
+    ``get_content`` and ``unlock`` are overridden to go through the
+    ``datalad`` CLI so that subdataset/run-record bookkeeping stays
+    consistent.
+    """
 
     name = "datalad"
-
-    def __init__(self, root: Path) -> None:
-        self.root = root
-        self._git = Git(root)
-        self._annex = GitAnnex(root)
 
     def _run_datalad(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -190,21 +192,6 @@ class DataLad:
             check=True,
         )
 
-    def move(self, src: Path, dst: Path) -> None:
-        self._git.move(src, dst)
-
-    def remove(self, path: Path) -> None:
-        self._git.remove(path)
-
-    def is_dirty(self) -> bool:
-        return self._git.is_dirty()
-
-    def commit(self, message: str, paths: list[Path]) -> None:
-        self._git.commit(message, paths)
-
-    def has_content(self, path: Path) -> bool:
-        return self._annex.has_content(path)
-
     def get_content(self, paths: list[Path]) -> None:
         if paths:
             self._run_datalad("get", *[str(p) for p in paths])
@@ -212,10 +199,6 @@ class DataLad:
     def unlock(self, paths: list[Path]) -> None:
         if paths:
             self._run_datalad("unlock", *[str(p) for p in paths])
-
-    def add(self, paths: list[Path]) -> None:
-        # Use git annex add to re-annex after modification
-        self._annex.add(paths)
 
 
 def detect_vcs(root: Path) -> VCSBackend:

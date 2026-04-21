@@ -1,0 +1,15 @@
+{
+  "threshold": 3,
+  "reporters": ["console"],
+  "ignore": [
+    "**/node_modules/**",
+    "**/.git/**",
+    "**/.tox/**",
+    "**/.venv/**",
+    "**/__pycache__/**",
+    "**/.specify/**",
+    "**/bids-examples/**"
+  ],
+  "minTokens": 50,
+  "minLines": 5
+}

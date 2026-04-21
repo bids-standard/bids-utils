@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from bids_utils._dataset import BIDSDataset
+from bids_utils._io import update_json_references
 from bids_utils._scans import find_scans_tsv, update_scans_entry
 from bids_utils._sidecars import find_sidecars
 from bids_utils._types import BIDSPath, Change, OperationResult
@@ -54,7 +55,7 @@ def rename_file(
     if not file_path.is_absolute():
         file_path = dataset.root / file_path
 
-    if not file_path.exists():
+    if not file_path.exists() and not file_path.is_symlink():
         result.success = False
         result.errors.append(f"File not found: {file_path}")
         return result
@@ -78,7 +79,8 @@ def rename_file(
     if new_suffix:
         bids_path = bids_path.with_suffix(new_suffix)
 
-    new_filename = bids_path.to_filename()
+    entity_order = dataset.schema.entity_order()
+    new_filename = bids_path.to_filename(entity_order=entity_order)
     new_file_path = file_path.parent / new_filename
 
     # Check no-op
@@ -87,7 +89,7 @@ def rename_file(
         return result
 
     # Check for conflicts
-    if new_file_path.exists():
+    if new_file_path.exists() or new_file_path.is_symlink():
         result.success = False
         result.errors.append(f"Target already exists: {new_file_path}")
         return result
@@ -103,7 +105,10 @@ def rename_file(
         new_sidecar_name = new_stem + _get_extension(sidecar.name)
         new_sidecar_path = sidecar.parent / new_sidecar_name
 
-        if new_sidecar_path.exists() and new_sidecar_path != sidecar:
+        target_exists = (
+            new_sidecar_path.exists() or new_sidecar_path.is_symlink()
+        )
+        if target_exists and new_sidecar_path != sidecar:
             result.success = False
             result.errors.append(f"Sidecar target already exists: {new_sidecar_path}")
             return result
@@ -156,6 +161,20 @@ def rename_file(
             scans_path,
             old_rel,
             new_rel,
+            vcs=dataset.vcs,
+            annexed_mode=dataset.annexed_mode,
+        )
+
+    # Update IntendedFor / AssociatedEmptyRoom / Sources references
+    # These use the old filename (subject-relative or bids:: URI) which
+    # must be updated to the new filename.
+    old_name = file_path.name
+    new_name = new_file_path.name
+    if old_name != new_name:
+        update_json_references(
+            dataset.root,
+            old_name,
+            new_name,
             vcs=dataset.vcs,
             annexed_mode=dataset.annexed_mode,
         )

@@ -113,8 +113,12 @@ def merge_datasets(
                 dest.mkdir(exist_ok=True)
                 for item in sub_dir.iterdir():
                     if item.is_dir():
-                        shutil.copytree(item, dest / item.name, dirs_exist_ok=True)
-                    elif not item.is_dir():
+                        # Plain datatype dirs and BIDS dir-files (.ds/.zarr)
+                        # both copied atomically via copytree.
+                        shutil.copytree(
+                            item, dest / item.name, dirs_exist_ok=True
+                        )
+                    else:
                         shutil.copy2(item, dest / item.name)
             else:
                 if dest.exists():

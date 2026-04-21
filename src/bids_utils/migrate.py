@@ -16,8 +16,9 @@ from typing import Any
 from bids_utils._dataset import BIDSDataset
 from bids_utils._io import read_json as _read_json
 from bids_utils._io import write_json as _write_json
+from bids_utils._participants import read_participants_tsv, write_participants_tsv
 from bids_utils._scans import find_scans_tsv, read_scans_tsv, write_scans_tsv
-from bids_utils._types import AnnexedMode, BIDSPath, Change
+from bids_utils._types import AnnexedMode, BIDSPath, Change, _is_bids_data_entry
 from bids_utils._vcs import VCSBackend
 
 # ---------------------------------------------------------------------------
@@ -33,6 +34,7 @@ class MigrationRule:
     from_version: str
     category: str  # field_rename, value_rename, suffix_rename, etc.
     description: str
+    level: str = "safe"  # "safe", "advisory", "non-auto-fixable"
     old_field: str | None = None
     new_field: str | None = None
     old_value: str | None = None
@@ -42,6 +44,7 @@ class MigrationRule:
     handler: Callable[..., list[MigrationFinding]] | None = field(
         default=None, repr=False
     )
+    condition: Callable[..., bool] | None = field(default=None, repr=False)
 
 
 @dataclass
@@ -81,8 +84,21 @@ def _register_rule(rule: MigrationRule) -> None:
     _RULES.append(rule)
 
 
+_LEVEL_TIERS: dict[str, set[str]] = {
+    "safe": {"safe"},
+    "advisory": {"safe", "advisory"},
+    "all": {"safe", "advisory", "non-auto-fixable"},
+}
+
+
 def _get_rules(
-    from_version: str, to_version: str, *, major_only: bool = False
+    from_version: str,
+    to_version: str,
+    *,
+    major_only: bool = False,
+    level: str = "all",
+    rule_ids: list[str] | None = None,
+    exclude_rules: list[str] | None = None,
 ) -> list[MigrationRule]:
     """Get applicable rules between two versions.
 
@@ -95,6 +111,13 @@ def _get_rules(
     major_only
         If True, only return rules for the target major version
         (e.g., only 2.0 rules, not 1.x rules).
+    level
+        Filter by migration level tier: ``"safe"``, ``"advisory"``,
+        or ``"all"``.
+    rule_ids
+        If provided, only include rules whose id is in this list (whitelist).
+    exclude_rules
+        If provided, exclude rules whose id is in this list (blacklist).
     """
     from packaging.version import InvalidVersion, Version
 
@@ -104,11 +127,27 @@ def _get_rules(
     except InvalidVersion:
         return []
 
+    allowed_levels = _LEVEL_TIERS.get(level, _LEVEL_TIERS["all"])
+    rule_id_set = set(rule_ids) if rule_ids else None
+    exclude_set = set(exclude_rules) if exclude_rules else None
+
     applicable = []
     for rule in _RULES:
         try:
             rule_v = Version(rule.from_version)
         except Exception:
+            continue
+
+        # Level filtering
+        if rule.level not in allowed_levels:
+            continue
+
+        # Whitelist filtering
+        if rule_id_set is not None and rule.id not in rule_id_set:
+            continue
+
+        # Blacklist filtering
+        if exclude_set is not None and rule.id in exclude_set:
             continue
 
         if major_only:
@@ -201,6 +240,7 @@ _register_rule(
     MigrationRule(
         id="suffix_T2star_ambiguous",
         from_version="1.6.0",
+        level="non-auto-fixable",
         category="suffix_deprecation",
         description="Suffix 'T2star' is deprecated"
         " — replace with 'T2starw' or 'T2starmap'",
@@ -213,6 +253,7 @@ _register_rule(
     MigrationRule(
         id="suffix_FLASH_removed",
         from_version="1.6.0",
+        level="non-auto-fixable",
         category="suffix_deprecation",
         description="Suffix 'FLASH' has been removed"
         " — use vendor-neutral suffix instead",
@@ -225,6 +266,7 @@ _register_rule(
     MigrationRule(
         id="suffix_PD_ambiguous",
         from_version="1.6.0",
+        level="non-auto-fixable",
         category="suffix_deprecation",
         description="Suffix 'PD' is deprecated — replace with 'PDw' or 'PDmap'",
         old_value="PD",
@@ -266,6 +308,7 @@ for tmpl in _DEPRECATED_TEMPLATES:
         MigrationRule(
             id=f"deprecated_template_{tmpl}",
             from_version="1.6.0",
+            level="non-auto-fixable",
             category="deprecated_template",
             description=f"Template identifier '{tmpl}' is deprecated",
             old_value=tmpl,
@@ -310,6 +353,85 @@ _register_rule(
     )
 )
 
+# AcquisitionDuration -> FrameAcquisitionDuration (conditional on VolumeTiming)
+_register_rule(
+    MigrationRule(
+        id="field_rename_AcquisitionDuration_to_FrameAcquisitionDuration",
+        from_version="1.6.0",
+        level="safe",
+        category="field_rename",
+        description=(
+            "Rename 'AcquisitionDuration' to 'FrameAcquisitionDuration'"
+            " (when VolumeTiming present)"
+        ),
+        old_field="AcquisitionDuration",
+        new_field="FrameAcquisitionDuration",
+        condition=lambda data: "VolumeTiming" in data,
+    )
+)
+_register_rule(
+    MigrationRule(
+        id="field_AcquisitionDuration_without_VolumeTiming",
+        from_version="1.6.0",
+        level="advisory",
+        category="field_rename",
+        description="AcquisitionDuration found without VolumeTiming — ambiguous rename",
+        old_field="AcquisitionDuration",
+        new_field="FrameAcquisitionDuration",
+        condition=lambda data: "VolumeTiming" not in data,
+    )
+)
+
+# Structural migration: DCOffsetCorrection -> SoftwareFilters sub-entry
+_register_rule(
+    MigrationRule(
+        id="dcoffset_to_softwarefilters",
+        from_version="1.6.0",
+        level="safe",
+        category="field_nest",
+        description=(
+            "Move 'DCOffsetCorrection' into SoftwareFilters sub-entry (iEEG)"
+        ),
+        old_field="DCOffsetCorrection",
+        new_field="SoftwareFilters",
+    )
+)
+# Field removals (deprecated fields)
+_register_rule(
+    MigrationRule(
+        id="field_removal_HardcopyDeviceSoftwareVersion",
+        from_version="1.6.0",
+        level="advisory",
+        category="field_removal",
+        description="Remove deprecated 'HardcopyDeviceSoftwareVersion' field (MRI)",
+        old_field="HardcopyDeviceSoftwareVersion",
+    )
+)
+
+# Age 89+ rules (participants.tsv)
+_register_rule(
+    MigrationRule(
+        id="age_89plus_string",
+        from_version="1.6.0",
+        level="safe",
+        category="tsv_column_value",
+        description="Convert string '89+' in age column to numeric 89",
+        old_field="age",
+        old_value="89+",
+        new_value="89",
+    )
+)
+_register_rule(
+    MigrationRule(
+        id="age_cap_89",
+        from_version="1.6.0",
+        level="advisory",
+        category="tsv_column_value",
+        description="Cap numeric age values > 89 to 89",
+        old_field="age",
+    )
+)
+
 
 # ---------------------------------------------------------------------------
 # BIDS 2.0 migration rules (placeholder infrastructure)
@@ -343,8 +465,14 @@ def _read_json_safe(
 
 
 def _scan_json_files(dataset_root: Path) -> list[Path]:
-    """Find all JSON sidecar files in the dataset."""
-    return sorted(dataset_root.rglob("*.json"))
+    """Find all JSON sidecar files in the dataset (skips dotdirs)."""
+    results: list[Path] = []
+    for p in sorted(dataset_root.rglob("*.json")):
+        rel = p.relative_to(dataset_root)
+        if rel.parts and rel.parts[0].startswith("."):
+            continue
+        results.append(p)
+    return results
 
 
 def _scan_for_field_rename(
@@ -360,12 +488,30 @@ def _scan_for_field_rename(
         if data is None:
             continue
         if rule.old_field and rule.old_field in data:
+            # Check condition if present
+            if rule.condition is not None:
+                cond_result = rule.condition(data)
+                if not cond_result:
+                    # Condition not met
+                    if rule.level in ("advisory", "non-auto-fixable"):
+                        # For advisory/non-auto-fixable rules whose condition
+                        # is False, skip (the paired rule handles it)
+                        continue
+                    # For safe rules whose condition is False, skip silently
+                    # (the separate advisory rule will catch it)
+                    continue
             findings.append(
                 MigrationFinding(
                     rule=rule,
                     file=jf,
                     current_value=f"{rule.old_field}: {data[rule.old_field]}",
                     proposed_value=f"{rule.new_field}: {data[rule.old_field]}",
+                    can_auto_fix=rule.level == "safe",
+                    reason=(
+                        None
+                        if rule.level == "safe"
+                        else rule.description
+                    ),
                 )
             )
     return findings
@@ -489,17 +635,14 @@ def _scan_bids_files(dataset_root: Path) -> list[Path]:
     """Find all BIDS data files (non-JSON, non-TSV) in the dataset."""
     results: list[Path] = []
     for p in sorted(dataset_root.rglob("*")):
-        if p.is_dir():
+        if not _is_bids_data_entry(p):
             continue
         # Skip non-BIDS directories
         rel = p.relative_to(dataset_root)
         parts = rel.parts
-        if parts and parts[0] in (
-            "derivatives",
-            "sourcedata",
-            "code",
-            ".git",
-            ".datalad",
+        if parts and (
+            parts[0].startswith(".")  # dotdirs: .git, .datalad, etc.
+            or parts[0] in ("derivatives", "sourcedata", "code")
         ):
             continue
         # Skip JSON sidecars, TSV files, and dataset_description
@@ -589,6 +732,147 @@ def _scan_for_deprecated_template(
                         ),
                     )
                 )
+    return findings
+
+
+def _scan_for_field_removal(
+    json_files: list[Path],
+    rule: MigrationRule,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR,
+) -> list[MigrationFinding]:
+    """Scan for deprecated metadata fields that should be removed."""
+    findings: list[MigrationFinding] = []
+    for jf in json_files:
+        data = _read_json_safe(jf, vcs, annexed_mode)
+        if data is None:
+            continue
+        if rule.old_field and rule.old_field in data:
+            findings.append(
+                MigrationFinding(
+                    rule=rule,
+                    file=jf,
+                    current_value=f"{rule.old_field}: {data[rule.old_field]}",
+                    proposed_value=f"Remove '{rule.old_field}'",
+                    can_auto_fix=True,
+                )
+            )
+    return findings
+
+
+def _scan_for_field_nest(
+    json_files: list[Path],
+    rule: MigrationRule,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR,
+) -> list[MigrationFinding]:
+    """Scan for fields that should be nested under another metadata key.
+
+    Currently targets the iEEG DCOffsetCorrection → SoftwareFilters
+    structural migration: restricted to sidecars in an ``ieeg`` datatype
+    directory.
+    """
+    findings: list[MigrationFinding] = []
+    if not rule.old_field or not rule.new_field:
+        return findings
+    for jf in json_files:
+        # Restrict to iEEG sidecars (scope per FR-031)
+        if jf.parent.name != "ieeg":
+            continue
+        data = _read_json_safe(jf, vcs, annexed_mode)
+        if data is None:
+            continue
+        if rule.old_field in data:
+            findings.append(
+                MigrationFinding(
+                    rule=rule,
+                    file=jf,
+                    current_value=f"{rule.old_field}: {data[rule.old_field]}",
+                    proposed_value=(
+                        f"{rule.new_field}.{rule.old_field}.description: "
+                        f"{data[rule.old_field]}"
+                    ),
+                    can_auto_fix=True,
+                )
+            )
+    return findings
+
+
+def _scan_for_age_column(
+    dataset_root: Path,
+    rule: MigrationRule,
+) -> list[MigrationFinding]:
+    """Scan participants.tsv for age values requiring migration."""
+    findings: list[MigrationFinding] = []
+    participants_tsv = dataset_root / "participants.tsv"
+    if not participants_tsv.exists():
+        return findings
+
+    rows = read_participants_tsv(participants_tsv)
+    if not rows:
+        return findings
+
+    # Check if 'age' column exists
+    if "age" not in rows[0]:
+        return findings
+
+    # Unit check: read participants.json if it exists
+    participants_json = dataset_root / "participants.json"
+    if participants_json.exists():
+        try:
+            sidecar = json.loads(participants_json.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            sidecar = {}
+        age_meta = sidecar.get("age", {})
+        units = age_meta.get("Units", "")
+        if units and units.lower() not in ("year", "years", ""):
+            # Non-year units — produce a non-auto-fixable finding
+            # so the user knows WHY the rule was skipped
+            findings.append(
+                MigrationFinding(
+                    rule=rule,
+                    file=participants_tsv,
+                    current_value=f"age column units={units}",
+                    proposed_value="skipped (89-year threshold applies to years only)",
+                    can_auto_fix=False,
+                    reason=f"Age column has units '{units}' — 89-year threshold "
+                    "does not apply to non-year units",
+                )
+            )
+            return findings
+
+    for i, row in enumerate(rows):
+        age_val = row.get("age", "")
+        if not age_val or age_val == "n/a":
+            continue
+
+        if rule.id == "age_89plus_string":
+            if age_val == "89+":
+                findings.append(
+                    MigrationFinding(
+                        rule=rule,
+                        file=participants_tsv,
+                        current_value=f"age='89+' (row {i})",
+                        proposed_value="age=89",
+                        can_auto_fix=True,
+                    )
+                )
+        elif rule.id == "age_cap_89":
+            try:
+                numeric_age = float(age_val)
+            except ValueError:
+                continue
+            if numeric_age > 89:
+                findings.append(
+                    MigrationFinding(
+                        rule=rule,
+                        file=participants_tsv,
+                        current_value=f"age={age_val} (row {i})",
+                        proposed_value="age=89",
+                        can_auto_fix=True,
+                    )
+                )
+
     return findings
 
 
@@ -713,6 +997,124 @@ def _apply_entity_rename(
 # ---------------------------------------------------------------------------
 
 
+def _apply_field_removal(
+    finding: MigrationFinding,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR,
+) -> Change | None:
+    """Remove a deprecated metadata field from a JSON sidecar."""
+    jf = finding.file
+    data = _read_json_safe(jf, vcs, annexed_mode)
+    if data is None:
+        return None
+    rule = finding.rule
+    if rule.old_field and rule.old_field in data:
+        data.pop(rule.old_field)
+        if vcs is not None:
+            _write_json(jf, data, vcs)
+        else:
+            jf.write_text(
+                json.dumps(data, indent=2) + "\n", encoding="utf-8"
+            )
+        return Change(
+            action="modify",
+            source=jf,
+            detail=f"Removed deprecated field '{rule.old_field}'",
+        )
+    return None
+
+
+def _apply_field_nest(
+    finding: MigrationFinding,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR,
+) -> Change | None:
+    """Move a flat field into a nested dict under ``new_field``.
+
+    For DCOffsetCorrection: produces
+    ``SoftwareFilters[DCOffsetCorrection] = {"description": value}``.
+    Preserves an existing ``SoftwareFilters`` dict and does not overwrite
+    an existing nested description.
+    """
+    jf = finding.file
+    data = _read_json_safe(jf, vcs, annexed_mode)
+    if data is None:
+        return None
+    rule = finding.rule
+    if not rule.old_field or not rule.new_field:
+        return None
+    if rule.old_field not in data:
+        return None
+    value = data.pop(rule.old_field)
+    container = data.get(rule.new_field)
+    if not isinstance(container, dict):
+        container = {}
+    existing_entry = container.get(rule.old_field)
+    if isinstance(existing_entry, dict):
+        existing_entry.setdefault("description", value)
+    else:
+        container[rule.old_field] = {"description": value}
+    data[rule.new_field] = container
+    if vcs is not None:
+        _write_json(jf, data, vcs)
+    else:
+        jf.write_text(
+            json.dumps(data, indent=2) + "\n", encoding="utf-8"
+        )
+    return Change(
+        action="modify",
+        source=jf,
+        detail=(
+            f"Moved '{rule.old_field}' into '{rule.new_field}' sub-entry"
+        ),
+    )
+
+
+def _apply_age_column(
+    finding: MigrationFinding,
+    dataset_root: Path,
+    vcs: VCSBackend | None = None,
+) -> Change | None:
+    """Apply age value fixes in participants.tsv."""
+    participants_tsv = dataset_root / "participants.tsv"
+    if not participants_tsv.exists():
+        return None
+
+    rows = read_participants_tsv(participants_tsv, vcs=vcs)
+    if not rows:
+        return None
+
+    rule = finding.rule
+    modified = False
+
+    for row in rows:
+        age_val = row.get("age", "")
+        if not age_val or age_val == "n/a":
+            continue
+
+        if rule.id == "age_89plus_string":
+            if age_val == "89+":
+                row["age"] = "89"
+                modified = True
+        elif rule.id == "age_cap_89":
+            try:
+                numeric_age = float(age_val)
+            except ValueError:
+                continue
+            if numeric_age > 89:
+                row["age"] = "89"
+                modified = True
+
+    if modified:
+        write_participants_tsv(participants_tsv, rows, vcs=vcs)
+        return Change(
+            action="modify",
+            source=participants_tsv,
+            detail=f"Applied age migration rule '{rule.id}'",
+        )
+    return None
+
+
 def _apply_field_rename(
     finding: MigrationFinding,
     vcs: VCSBackend | None = None,
@@ -726,18 +1128,20 @@ def _apply_field_rename(
     rule = finding.rule
     if rule.old_field and rule.old_field in data:
         value = data.pop(rule.old_field)
-        # Merge into new field (handle Sources consolidation)
+        # Merge into new field (handle Sources consolidation).
+        # Normalize both sides to lists so mixed string/array types merge
+        # correctly; 3-way merges (e.g. Sources + BasedOn + RawSources) work
+        # iteratively as each rule runs.
         if rule.new_field:
             existing = data.get(rule.new_field)
-            if existing is not None:
-                # Merge lists
-                if isinstance(existing, list) and isinstance(value, list):
-                    data[rule.new_field] = existing + value
-                elif isinstance(existing, list):
-                    data[rule.new_field] = existing + [value]
-                # else: existing value takes precedence
-            else:
+            if existing is None:
                 data[rule.new_field] = value
+            else:
+                existing_list = (
+                    list(existing) if isinstance(existing, list) else [existing]
+                )
+                value_list = list(value) if isinstance(value, list) else [value]
+                data[rule.new_field] = existing_list + value_list
         if vcs is not None:
             _write_json(jf, data, vcs)
         else:
@@ -825,13 +1229,78 @@ def _apply_path_format(
     return None
 
 
+def _default_scans_tsv_path(jf: Path, dataset_root: Path) -> Path | None:
+    """Compute the canonical ``_scans.tsv`` location for a sidecar.
+
+    Uses the sidecar's ``sub``/``ses`` entities to derive the conventional
+    path (e.g. ``sub-01/ses-pre/sub-01_ses-pre_scans.tsv``).  Returns
+    ``None`` if the sidecar does not carry a subject entity.
+    """
+    try:
+        bp = BIDSPath.from_path(jf)
+    except Exception:
+        return None
+    sub = bp.entities.get("sub")
+    if not sub:
+        return None
+    ses = bp.entities.get("ses")
+    if ses:
+        container = dataset_root / f"sub-{sub}" / f"ses-{ses}"
+        name = f"sub-{sub}_ses-{ses}_scans.tsv"
+    else:
+        container = dataset_root / f"sub-{sub}"
+        name = f"sub-{sub}_scans.tsv"
+    return container / name
+
+
+def _scans_tsv_filename_entry(jf: Path, scans_path: Path) -> str:
+    """Build the ``filename`` column entry for a sidecar row.
+
+    Looks for a sibling data file (non-JSON, non-TSV) sharing the
+    sidecar's stem; falls back to the sidecar's stem with ``.nii.gz``
+    when none is found (synthetic datasets, JSON-only sidecars).
+    """
+    stem = jf.stem
+    data_name: str | None = None
+    if jf.parent.exists():
+        for sibling in sorted(jf.parent.iterdir()):
+            if sibling.name == jf.name:
+                continue
+            if sibling.suffix in (".json", ".tsv"):
+                continue
+            if not _is_bids_data_entry(sibling):
+                continue
+            sib_stem = sibling.name
+            # Strip compound extensions for comparison
+            for ext in (".nii.gz", ".tsv.gz"):
+                if sib_stem.endswith(ext):
+                    sib_stem = sib_stem[: -len(ext)]
+                    break
+            else:
+                sib_stem = Path(sibling.name).stem
+            if sib_stem == stem:
+                data_name = sibling.name
+                break
+    if data_name is None:
+        data_name = f"{stem}.nii.gz"
+    try:
+        return str(jf.parent.joinpath(data_name).relative_to(scans_path.parent))
+    except ValueError:
+        return data_name
+
+
 def _apply_scandate_move(
     finding: MigrationFinding,
     dataset_root: Path,
     vcs: VCSBackend | None = None,
     annexed_mode: AnnexedMode = AnnexedMode.ERROR,
 ) -> Change | None:
-    """Move ScanDate from JSON to _scans.tsv acq_time."""
+    """Move ScanDate from JSON to _scans.tsv acq_time.
+
+    If no ``_scans.tsv`` exists yet for the subject/session, one is
+    created with the required ``filename``/``acq_time`` headers so the
+    ScanDate value is never dropped silently.
+    """
     jf = finding.file
     data = _read_json_safe(jf, vcs, annexed_mode)
     if data is None:
@@ -846,27 +1315,55 @@ def _apply_scandate_move(
     else:
         jf.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
-    # Try to find the corresponding _scans.tsv and update acq_time
+    # Try to find the corresponding _scans.tsv; create one if missing.
     scans_path = find_scans_tsv(jf, dataset_root)
-    if scans_path is not None:
+    created_new = False
+    if scans_path is None:
+        scans_path = _default_scans_tsv_path(jf, dataset_root)
+        if scans_path is None:
+            # Cannot safely place a scans file — restore ScanDate rather
+            # than drop it silently.
+            data["ScanDate"] = scan_date
+            if vcs is not None:
+                _write_json(jf, data, vcs)
+            else:
+                jf.write_text(
+                    json.dumps(data, indent=2) + "\n", encoding="utf-8"
+                )
+            return None
+        scans_path.parent.mkdir(parents=True, exist_ok=True)
+        created_new = True
+
+    if created_new:
+        rows: list[dict[str, str]] = []
+    else:
         rows = read_scans_tsv(
             scans_path, vcs=vcs, annexed_mode=annexed_mode
         )
-        # Find the data file that corresponds to this JSON
-        stem = jf.stem  # e.g., sub-01_bold
-        for row in rows:
-            fn = row.get("filename", "")
-            if fn.replace(".nii.gz", "").replace(".nii", "").endswith(stem):
-                if not row.get("acq_time"):
-                    row["acq_time"] = scan_date
-                break
-        write_scans_tsv(scans_path, rows, vcs=vcs)
 
-    return Change(
-        action="modify",
-        source=jf,
-        detail=f"Moved ScanDate ({scan_date}) to _scans.tsv acq_time",
+    stem = jf.stem  # e.g., sub-01_bold
+    matched = False
+    for row in rows:
+        fn = row.get("filename", "")
+        if fn.replace(".nii.gz", "").replace(".nii", "").endswith(stem):
+            if not row.get("acq_time"):
+                row["acq_time"] = scan_date
+            matched = True
+            break
+
+    if not matched:
+        filename_entry = _scans_tsv_filename_entry(jf, scans_path)
+        rows.append({"filename": filename_entry, "acq_time": scan_date})
+
+    # write_tsv is a no-op on empty rows, so ensure we always have content
+    # (we just appended above when the file was new).
+    write_scans_tsv(scans_path, rows, vcs=vcs)
+
+    detail = (
+        f"Moved ScanDate ({scan_date}) to {scans_path.name}:acq_time"
+        + (" (created)" if created_new else "")
     )
+    return Change(action="modify", source=jf, detail=detail)
 
 
 def _apply_doi_format(
@@ -928,6 +1425,10 @@ def migrate_dataset(
     *,
     to_version: str | None = None,
     dry_run: bool = False,
+    level: str = "all",
+    mode: str = "auto",
+    rule_ids: list[str] | None = None,
+    exclude_rules: list[str] | None = None,
 ) -> MigrationResult:
     """Apply schema-driven migrations to a BIDS dataset.
 
@@ -943,6 +1444,17 @@ def migrate_dataset(
         Target BIDS version. If None, defaults to the current schema version.
     dry_run
         If True, scan and report findings without modifying files.
+    level
+        Filter by migration level tier: ``"safe"``, ``"advisory"``,
+        or ``"all"``.  The default ``"all"`` includes every rule.
+    mode
+        Interaction mode: ``"auto"`` (behaves like ``"non-interactive"``
+        for now), ``"non-interactive"`` (skip non-auto-fixable findings),
+        or ``"interactive"`` (prompt — not yet implemented).
+    rule_ids
+        If provided, only run rules whose id is in this list (whitelist).
+    exclude_rules
+        If provided, skip rules whose id is in this list (blacklist).
 
     Returns
     -------
@@ -963,14 +1475,22 @@ def migrate_dataset(
 
     is_major_upgrade = _is_major_version_upgrade(from_version, to_version)
 
+    filter_kwargs: dict[str, Any] = {
+        "level": level,
+        "rule_ids": rule_ids,
+        "exclude_rules": exclude_rules,
+    }
+
     if is_major_upgrade:
         # Cumulative migration: apply all 1.x fixes first, then 2.0 rules
         latest_1x = _latest_1x_version()
-        onex_rules = _get_rules(from_version, latest_1x)
-        twox_rules = _get_rules(from_version, to_version, major_only=True)
+        onex_rules = _get_rules(from_version, latest_1x, **filter_kwargs)
+        twox_rules = _get_rules(
+            from_version, to_version, major_only=True, **filter_kwargs
+        )
         rules = onex_rules + twox_rules
     else:
-        rules = _get_rules(from_version, to_version)
+        rules = _get_rules(from_version, to_version, **filter_kwargs)
 
     if not rules:
         result.warnings.append("No applicable migration rules found")
@@ -1003,6 +1523,15 @@ def migrate_dataset(
         ),
         "deprecated_template": lambda r: _scan_for_deprecated_template(
             json_files, r, vcs=vcs, annexed_mode=amode
+        ),
+        "field_removal": lambda r: _scan_for_field_removal(
+            json_files, r, vcs=vcs, annexed_mode=amode
+        ),
+        "field_nest": lambda r: _scan_for_field_nest(
+            json_files, r, vcs=vcs, annexed_mode=amode
+        ),
+        "tsv_column_value": lambda r: _scan_for_age_column(
+            dataset.root, r
         ),
         # 2.0-specific categories
         "entity_rename": lambda r: _scan_for_entity_rename(dataset.root, r),
@@ -1062,6 +1591,15 @@ def migrate_dataset(
             f, vcs=vcs, annexed_mode=amode
         ),
         "suffix_deprecation": lambda f: _apply_suffix_deprecation(f, dataset),
+        "field_removal": lambda f: _apply_field_removal(
+            f, vcs=vcs, annexed_mode=amode
+        ),
+        "field_nest": lambda f: _apply_field_nest(
+            f, vcs=vcs, annexed_mode=amode
+        ),
+        "tsv_column_value": lambda f: _apply_age_column(
+            f, dataset.root, vcs=vcs
+        ),
         # 2.0-specific appliers
         "entity_rename": lambda f: _apply_entity_rename(f, dataset),
         "metadata_key_change": lambda f: _apply_field_rename(

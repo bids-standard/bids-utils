@@ -10,6 +10,7 @@ from bids_utils._scans import find_scans_tsv, remove_scans_entry, update_scans_e
 from bids_utils._types import (
     Change,
     OperationResult,
+    _is_bids_data_entry,
     normalize_subject_id,
     rename_change,
     require_subject_dir,
@@ -48,7 +49,7 @@ def remove_run(
     # Find all files matching this run
     run_files: list[Path] = []
     for f in sorted(sub_dir.rglob("*")):
-        if not f.is_dir() and run_id in f.name:
+        if _is_bids_data_entry(f) and run_id in f.name:
             run_files.append(f)
 
     if not run_files:
@@ -66,7 +67,7 @@ def remove_run(
     shifts: list[tuple[Path, Path]] = []
     if shift:
         for f in sorted(sub_dir.rglob("*")):
-            if f.is_dir():
+            if not _is_bids_data_entry(f):
                 continue
             m = re.search(r"run-(\d+)", f.name)
             if not m:

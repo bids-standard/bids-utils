@@ -16,10 +16,123 @@ def _has_bids_examples() -> bool:
     return BIDS_EXAMPLES_DIR.is_dir() and (BIDS_EXAMPLES_DIR / "README.md").exists()
 
 
+def _has_bids_validator() -> bool:
+    return shutil.which("bids-validator-deno") is not None
+
+
+requires_bids_validator = pytest.mark.skipif(
+    not _has_bids_validator(),
+    reason="bids-validator-deno not installed",
+)
+
+
+def validate_dataset(ds_path: Path) -> tuple[bool, list[dict]]:
+    """Run bids-validator-deno on a dataset.
+
+    Returns ``(valid, errors)`` where *errors* is the list of error-severity
+    issues.  Uses ``--ignoreNiftiHeaders`` because bids-examples ships stub
+    NIfTI files.
+
+    Raises ``FileNotFoundError`` if ``bids-validator-deno`` is not installed.
+    """
+    if not _has_bids_validator():
+        raise FileNotFoundError("bids-validator-deno not installed")
+
+    result = subprocess.run(
+        [
+            "bids-validator-deno",
+            str(ds_path),
+            "--format",
+            "json",
+            "--ignoreNiftiHeaders",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return False, [
+            {
+                "code": "VALIDATOR_PARSE_ERROR",
+                "severity": "error",
+                "message": result.stderr[:500],
+            }
+        ]
+
+    # v2 validator: issues.issues is a flat list with "severity" field
+    all_issues = data.get("issues", {}).get("issues", [])
+    # Filter: errors only, ignore EMPTY_FILE and NIFTI issues (bids-examples
+    # ships stub/zero-byte data files that are expected to fail these checks)
+    ignorable = {
+        "EMPTY_FILE",
+        "NIFTI_HEADER_UNREADABLE",
+        "NIFTI_UNIT",
+        # bids-examples ships files with intentionally invalid suffixes
+        # (e.g., ds000248/sub-01/anat/sub-01_THISSUFFIXISNOTVALID.json)
+        "NOT_INCLUDED",
+        "SIDECAR_WITHOUT_DATAFILE",
+    }
+    errors = [
+        i
+        for i in all_issues
+        if i.get("severity") == "error" and i.get("code") not in ignorable
+    ]
+    return len(errors) == 0, errors
+
+
 requires_bids_examples = pytest.mark.skipif(
     not _has_bids_examples(),
     reason="bids-examples submodule not available",
 )
+
+
+# Cache of dataset names that pass bids-validator (computed once per session).
+_VALID_DATASETS: list[str] | None = None
+
+
+def validated_dataset_ids() -> list[str]:
+    """Return bids-examples dataset names that pass bids-validator.
+
+    Results are cached across the entire test session.  Datasets that
+    fail validation (or have no ``dataset_description.json``) are
+    excluded — they would cause every mutating test to skip anyway.
+    """
+    global _VALID_DATASETS  # noqa: PLW0603
+    if _VALID_DATASETS is not None:
+        return _VALID_DATASETS
+
+    if not _has_bids_examples() or not _has_bids_validator():
+        _VALID_DATASETS = []
+        return _VALID_DATASETS
+
+    valid: list[str] = []
+    for d in sorted(BIDS_EXAMPLES_DIR.iterdir()):
+        if not d.is_dir() or not (d / "dataset_description.json").is_file():
+            continue
+        ok, _ = validate_dataset(d)
+        if ok:
+            valid.append(d.name)
+    _VALID_DATASETS = valid
+    return _VALID_DATASETS
+
+
+def validated_session_dataset_ids() -> list[str]:
+    """Subset of ``validated_dataset_ids`` that contain ``ses-*`` dirs."""
+    ids: list[str] = []
+    for name in validated_dataset_ids():
+        ds = BIDS_EXAMPLES_DIR / name
+        for sub in ds.iterdir():
+            if not sub.is_dir() or not sub.name.startswith("sub-"):
+                continue
+            if any(
+                c.is_dir() and c.name.startswith("ses-")
+                for c in sub.iterdir()
+            ):
+                ids.append(name)
+                break
+    return ids
 
 
 @pytest.fixture

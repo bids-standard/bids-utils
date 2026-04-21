@@ -23,6 +23,11 @@ their research data, and breaking a dataset is unacceptable.
   unless `--force` is passed.
 - When in doubt about correctness, refuse to act and explain why. It is always
   better to abort with a clear message than to silently corrupt data.
+- **Fail loudly, never degrade silently.** If a mandated tool or check is
+  unavailable (e.g., `jscpd` not installed, validator crashes), the operation
+  MUST fail with a clear error — never emit a "warning" and continue as if
+  the check passed. Warnings that mask missing checks are worse than errors
+  because they create a false sense of compliance.
 - Before modifying any file, verify the dataset's structural integrity for the
   affected entities (not necessarily a full validation, but targeted checks).
 
@@ -87,6 +92,10 @@ TDD is mandatory. Tests are written before implementation.
 - Integration tests against real filesystem layouts, not just mocks.
 - Tests must cover edge cases: datasets with `sourcedata/`, `.heudiconv/`,
   `_scans.tsv` files, inheritance hierarchies, missing metadata files.
+- **git-annex testing is mandatory**: the `bids-examples` sweep must run in
+  both regular git and git-annex modes (all files forced into annex). A
+  `tmp_annex_dataset` fixture with locked symlinks must be used for unit tests
+  of any file-manipulating operation.
 - bids-examples is a git submodule or test fixture, always available in CI.
 
 ### VI. Performance at Scale
@@ -103,15 +112,26 @@ must remain usable at scale.
 - For remote/annexed datasets, support transparent access via fsspec and
   git-annex awareness (datalad-fuse) without requiring full local copies.
 
-### VII. VCS Awareness
+### VII. VCS Awareness (NON-NEGOTIABLE for git-annex)
 
 Many BIDS datasets live under version control (git, git-annex, DataLad).
-bids-utils must respect this.
+bids-utils must respect this. **Git-annex support is not an afterthought —
+a majority of large BIDS datasets are managed with DataLad/git-annex.**
 
 - Detect and use the VCS layer when present: `git mv` instead of `os.rename`,
   `git rm` instead of `os.unlink`.
 - Support git-annex: handle annexed (locked) files correctly, use `git annex`
   commands when appropriate.
+- **Annexed files are symlinks.** Code MUST treat symlinks as files everywhere:
+  - `Path.is_file()` follows symlinks — returns `False` for annexed files
+    without content. Use `not path.is_dir()` for file iteration.
+  - `Path.exists()` follows symlinks — returns `False` for broken symlinks.
+    Use `path.exists() or path.is_symlink()` when checking file existence.
+  - `Path.resolve()` follows symlinks — resolves to `.git/annex/objects/...`.
+    Use `Path.absolute()` to preserve the symlink path.
+- **All tests MUST pass on both regular and git-annex datasets.** The
+  `bids-examples` sweep tests must run in both plain-git and git-annex modes
+  (force all files into annex) to verify no operation breaks on symlinks.
 - When DataLad is available, prefer `datalad run` semantics for provenance.
 - When no VCS is detected, operate directly on the filesystem.
 - Never silently ignore VCS state: if a git working tree is dirty in a way
@@ -352,4 +372,4 @@ Amendments require:
 All PRs and reviews must verify compliance with these principles. Deviations
 from the constitution must be explicitly justified and documented.
 
-**Version**: 1.4.0 | **Ratified**: 2026-03-21 | **Last Amended**: 2026-04-02
+**Version**: 1.5.0 | **Ratified**: 2026-03-21 | **Last Amended**: 2026-04-10

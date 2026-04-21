@@ -29,6 +29,14 @@ def _make_simple_dataset(tmp_path: Path, name: str, subjects: list[str]) -> Path
     return ds
 
 
+def _overlapping_pair(tmp_path: Path, sub: str = "01") -> tuple[Path, Path, Path]:
+    """Create two single-subject datasets sharing *sub* and an output path."""
+    ds_a = _make_simple_dataset(tmp_path, "dsA", [sub])
+    ds_b = _make_simple_dataset(tmp_path, "dsB", [sub])
+    output = tmp_path / "merged"
+    return ds_a, ds_b, output
+
+
 class TestMerge:
     @pytest.mark.ai_generated
     def test_merge_non_overlapping(self, tmp_path: Path) -> None:
@@ -45,9 +53,7 @@ class TestMerge:
 
     @pytest.mark.ai_generated
     def test_merge_conflict_error(self, tmp_path: Path) -> None:
-        ds_a = _make_simple_dataset(tmp_path, "dsA", ["01"])
-        ds_b = _make_simple_dataset(tmp_path, "dsB", ["01"])
-        output = tmp_path / "merged"
+        ds_a, ds_b, output = _overlapping_pair(tmp_path)
 
         result = merge_datasets([ds_a, ds_b], output, on_conflict="error")
 
@@ -56,9 +62,7 @@ class TestMerge:
 
     @pytest.mark.ai_generated
     def test_merge_into_sessions(self, tmp_path: Path) -> None:
-        ds_a = _make_simple_dataset(tmp_path, "dsA", ["01"])
-        ds_b = _make_simple_dataset(tmp_path, "dsB", ["01"])
-        output = tmp_path / "merged"
+        ds_a, ds_b, output = _overlapping_pair(tmp_path)
 
         result = merge_datasets([ds_a, ds_b], output, into_sessions=["ses-A", "ses-B"])
 

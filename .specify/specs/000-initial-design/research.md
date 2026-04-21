@@ -1,6 +1,6 @@
 # Research: bids-utils — Prior Art & Ecosystem Analysis
 
-**Branch**: `00-initial-design` | **Date**: 2026-04-03
+**Branch**: `000-initial-design` | **Date**: 2026-04-03
 
 ## 1. Migration Prototypes
 
@@ -192,12 +192,16 @@ Returns a `Namespace` object (dict-like, supports both dot and bracket notation)
 
 ### Deprecation Handling
 
-Deprecated elements marked with `deprecated` level field. Four requirement levels: REQUIRED, RECOMMENDED, OPTIONAL, DEPRECATED.
+Deprecated elements are marked at **multiple independent schema levels** — all must be scanned for complete coverage:
 
-**Key schema files for migration**:
-- `objects/metadata.yaml` — Field definitions with deprecated indicators and replacement guidance
-- `objects/enums.yaml` — Deprecated enum values with replacements
-- `rules/checks/deprecations.yml` — Deprecation checking rules with `issue`, `code`, `message`, `level`, `selectors`, `checks`
+1. **`rules/sidecars`** — Field-level `deprecated` annotations on sidecar metadata fields (e.g., `DCOffsetCorrection: deprecated` in `ieeg/iEEGRecommended`, `HardcopyDeviceSoftwareVersion: deprecated` in `mri/MRIHardware`, `AcquisitionDuration` with deprecated level in `func/MRIFuncTimingParameters`, `ScanDate` with deprecated level in `pet/PETTime`, `RawSources: deprecated` in `derivatives/common_derivatives`)
+2. **`rules/checks`** — Validator check rules with error codes (e.g., `func.PhaseSuffixDeprecated`, `func.DeprecatedAcquisitionDuration`, `privacy.CheckAge89`)
+3. **`objects/metadata`** — Description text containing "DEPRECATED" (e.g., `BasedOn`, `RawSources`, `ScanDate`, `DatasetDOI`, `IntendedFor`, `AssociatedEmptyRoom`)
+4. **`objects/enums`** — Deprecated enum values (e.g., `ElektaNeuromag`, `_StandardTemplateDeprecatedCoordSys` list)
+5. **`objects/columns`** — Column-level deprecations (e.g., `age` column: "89+" string format DEPRECATED)
+6. **`objects/suffixes`** — Deprecated suffixes (e.g., `phase`)
+
+**Critical finding (2026-04-15)**: Initial implementation only scanned `rules/checks` and `objects/metadata`, missing `rules/sidecars` field annotations entirely. This caused `DCOffsetCorrection` and `HardcopyDeviceSoftwareVersion` to be overlooked. A schema deprecation audit (FR-033) must scan all 6 levels to prevent gaps.
 
 ### Version Support
 

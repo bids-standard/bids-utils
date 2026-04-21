@@ -34,9 +34,25 @@ class BIDSSchema:
         return str(self._schema.get("bids_version", "unknown"))
 
     def entity_order(self) -> list[str]:
-        """Return the canonical entity ordering."""
-        entities = getattr(self._schema, "objects", {}).get("entities", {})
-        return list(entities.keys())
+        """Return the canonical entity ordering as short (filename) keys.
+
+        Uses ``rules.entities`` for correct ordering, then maps each long
+        entity name to its short filename key via ``objects.entities[*].name``.
+        """
+        entities_obj = getattr(self._schema, "objects", {}).get("entities", {})
+        rules_order = getattr(self._schema, "rules", {}).get("entities", [])
+
+        # Build long-name -> short-key mapping
+        long_to_short: dict[str, str] = {}
+        for long_name, info in entities_obj.items():
+            short_key = dict(info).get("name", long_name)
+            long_to_short[long_name] = short_key
+
+        if rules_order:
+            return [long_to_short.get(ln, ln) for ln in rules_order]
+
+        # Fallback: use objects ordering with short keys
+        return list(long_to_short.values())
 
     def sidecar_extensions(self, suffix: str) -> list[str]:
         """Return known sidecar extensions for a given suffix.

@@ -41,7 +41,9 @@ def find_scans_tsv(file_path: Path, dataset_root: Path) -> Path | None:
     search_dir = file_path.parent
     while search_dir != dataset_root.parent:
         for f in search_dir.iterdir():
-            if f.name.endswith("_scans.tsv") and f.is_file():
+            if f.name.endswith("_scans.tsv") and (
+                f.is_file() or f.is_symlink()
+            ):
                 return f
         # Stop at dataset root
         if search_dir == dataset_root:

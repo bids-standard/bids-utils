@@ -19,9 +19,39 @@ from bids_utils.migrate import migrate_dataset
     default=None,
     help="Target BIDS version (default: current released).",
 )
+@click.option(
+    "--level",
+    type=click.Choice(["safe", "advisory", "all"]),
+    default="safe",
+    help="Migration rule tier to include (default: safe).",
+)
+@click.option(
+    "--mode",
+    type=click.Choice(["auto", "non-interactive", "interactive"]),
+    default="auto",
+    help="Interaction mode (default: auto).",
+)
+@click.option(
+    "--rule-id",
+    "rule_ids",
+    multiple=True,
+    type=str,
+    help="Only run specific rule(s) by id (repeatable).",
+)
+@click.option(
+    "--exclude-rule",
+    "exclude_rules",
+    multiple=True,
+    type=str,
+    help="Exclude specific rule(s) by id (repeatable).",
+)
 @common_options
 def migrate(
     to_version: str | None,
+    level: str,
+    mode: str,
+    rule_ids: tuple[str, ...],
+    exclude_rules: tuple[str, ...],
     dry_run: str | None,
     json_output: bool,
     verbose: int,
@@ -35,7 +65,15 @@ def migrate(
     if schema_version:
         dataset.schema_version = schema_version
 
-    result = migrate_dataset(dataset, to_version=to_version, dry_run=bool(dry_run))
+    result = migrate_dataset(
+        dataset,
+        to_version=to_version,
+        dry_run=bool(dry_run),
+        level=level,
+        mode=mode,
+        rule_ids=list(rule_ids) or None,
+        exclude_rules=list(exclude_rules) or None,
+    )
 
     if json_output:
         output: dict[str, object] = {

@@ -2,9 +2,40 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from bids_utils._dataset import BIDSDataset
+from bids_utils._io import update_json_references
 from bids_utils._scans import read_scans_tsv, write_scans_tsv
-from bids_utils._types import Change, OperationResult
+from bids_utils._types import (
+    AnnexedMode,
+    Change,
+    OperationResult,
+    _is_bids_data_entry,
+)
+from bids_utils._vcs import VCSBackend
+
+
+def _rewrite_scans_labels(
+    scans_file: Path,
+    old_label: str,
+    new_label: str,
+    vcs: VCSBackend,
+    amode: AnnexedMode,
+) -> None:
+    """Read a scans.tsv and rewrite any ``filename`` entry containing *old_label*.
+
+    If no row needs to change, the file is left untouched.
+    """
+    rows = read_scans_tsv(scans_file, vcs=vcs, annexed_mode=amode)
+    modified = False
+    for row in rows:
+        fn = row.get("filename", "")
+        if old_label in fn:
+            row["filename"] = fn.replace(old_label, new_label)
+            modified = True
+    if modified:
+        write_scans_tsv(scans_file, rows, vcs=vcs)
 
 
 def rename_session(
@@ -81,7 +112,7 @@ def rename_session(
             new_label = new_id
             file_renames: list[tuple[str, str]] = []
             for f in sorted(old_ses_dir.rglob("*"), reverse=True):
-                if not f.is_dir() and old_label in f.name:
+                if _is_bids_data_entry(f) and old_label in f.name:
                     new_name = f.name.replace(old_label, new_label)
                     if f.name != new_name:
                         # Record with paths relative to old_ses_dir
@@ -112,27 +143,31 @@ def rename_session(
 
             vcs.move(old_ses_dir, new_ses_dir)
 
-            # Rename files within the session
+            # Rename files within the session (reverse order: children
+            # before parents so files inside .ds/.zarr get renamed first)
             for f in sorted(new_ses_dir.rglob("*"), reverse=True):
-                if not f.is_dir() and old_label in f.name:
+                if _is_bids_data_entry(f) and old_label in f.name:
                     new_name = f.name.replace(old_label, new_label)
                     new_path = f.parent / new_name
                     if f != new_path:
                         vcs.move(f, new_path)
 
-            # Update scans.tsv
+            # Update scans.tsv (within session dir and at subject level)
             for scans_file in new_ses_dir.rglob("*_scans.tsv"):
-                rows = read_scans_tsv(
-                    scans_file, vcs=vcs, annexed_mode=amode
+                _rewrite_scans_labels(
+                    scans_file, old_label, new_label, vcs, amode
                 )
-                modified = False
-                for row in rows:
-                    fn = row.get("filename", "")
-                    if old_label in fn:
-                        row["filename"] = fn.replace(old_label, new_label)
-                        modified = True
-                if modified:
-                    write_scans_tsv(scans_file, rows, vcs=vcs)
+
+            # Also update subject-level scans.tsv which may reference
+            # files by session-relative paths (e.g., ses-1/eeg/...)
+            for scans_file in sub_dir.iterdir():
+                if not scans_file.name.endswith("_scans.tsv"):
+                    continue
+                if not (scans_file.is_file() or scans_file.is_symlink()):
+                    continue
+                _rewrite_scans_labels(
+                    scans_file, old_label, new_label, vcs, amode
+                )
 
         else:
             # Move into session: no existing session, introduce new one
@@ -168,7 +203,7 @@ def rename_session(
             new_ses_label = new_id
             for dt_dir in datatype_dirs:
                 for f in sorted(dt_dir.rglob("*")):
-                    if f.is_dir():
+                    if not _is_bids_data_entry(f):
                         continue
                     if sub_name in f.name and new_ses_label not in f.name:
                         new_name = f.name.replace(
@@ -194,10 +229,11 @@ def rename_session(
                 target = new_ses_dir / dt_dir.name
                 vcs.move(dt_dir, target)
 
-            # Rename files to include session entity
+            # Rename files to include session entity (reverse order: children
+            # before parents so files inside .ds/.zarr get renamed first)
             for f in sorted(new_ses_dir.rglob("*"), reverse=True):
                 if (
-                    not f.is_dir()
+                    _is_bids_data_entry(f)
                     and sub_name in f.name
                     and new_ses_label not in f.name
                 ):
@@ -229,5 +265,11 @@ def rename_session(
                             )
                             row["filename"] = f"{datatype}/{new_fname}"
                 write_scans_tsv(new_scans, rows, vcs=vcs)
+
+    # Update IntendedFor / AssociatedEmptyRoom / Sources references
+    if old_id and not dry_run:
+        update_json_references(
+            dataset.root, old_id, new_id, vcs=vcs, annexed_mode=amode
+        )
 
     return result

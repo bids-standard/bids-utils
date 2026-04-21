@@ -1,7 +1,7 @@
 # Implementation Plan: bids-utils — Core Library & CLI
 
-**Branch**: `00-initial-design` | **Date**: 2026-04-03 | **Spec**: [00-initial-design.md](../00-initial-design.md)
-**Input**: Feature specification from `.specify/specs/00-initial-design.md`
+**Branch**: `000-initial-design` | **Date**: 2026-04-03 | **Spec**: [000-initial-design.md](../000-initial-design.md)
+**Input**: Feature specification from `.specify/specs/000-initial-design.md`
 
 ## Summary
 
@@ -27,7 +27,7 @@ Build `bids-utils`, a Python library and CLI for manipulating BIDS datasets. Cor
 | Principle | Status | Notes |
 |-----------|--------|-------|
 | I. Do No Harm | PASS | Every operation validates affected entities; `--dry-run` mandatory; atomic operations |
-| II. Schema-Driven | PASS | All BIDS knowledge from `bidsschematools`; multi-version support designed in |
+| II. Schema-Driven | PASS | All BIDS knowledge from `bidsschematools`; multi-version support; FR-033 audit ensures schema/rule sync across all 6 deprecation levels |
 | III. Library-First | PASS | Every CLI command maps to a public library function |
 | IV. CLI Excellence | PASS | `--dry-run`, `--json`, `-v`/`-q`, meaningful exit codes for every command |
 | V. Test-First | PASS | TDD enforced; `bids-examples` sweep testing; randomized testing for coverage |
@@ -43,7 +43,7 @@ Build `bids-utils`, a Python library and CLI for manipulating BIDS datasets. Cor
 ### Documentation (this feature)
 
 ```text
-.specify/specs/00-initial-design/
+.specify/specs/000-initial-design/
 ├── plan.md              # This file
 ├── research.md          # Prior art & ecosystem analysis
 ├── data-model.md        # Core data model design
@@ -207,52 +207,123 @@ tests/
 
 ### Phase 3: Migration — 1.x Deprecations (Story 2 — P1)
 
-**Goal**: `bids-utils migrate` handles all known 1.x deprecations.
+**Goal**: `bids-utils migrate` handles all known 1.x deprecations with tiered migration levels.
 
 **Prior art**: PR #2282's decorator-based migration registry pattern is directly reusable. It implements `@registry.register(name="...", version="1.10.0", description="...")` with dry-run support and JSON-safe operations. Currently handles 3 migrations; bids-utils must extend to cover all 1.x deprecations.
 
 **Steps**:
-1. Implement migration rule engine in `migrate.py`:
-   - Adopt/adapt the migration registry pattern from PR #2282
-   - Load deprecation rules from schema (`rules/checks/deprecations.yml`)
-   - Load metadata definitions (for field renames) from `objects/metadata.yaml`
-   - Load enum definitions (for value renames) from `objects/enums.yaml`
+1. **Extend MigrationRule schema** (FR-029):
+   - Add `level` field to `MigrationRule`: `safe` | `advisory` | `non-auto-fixable`
+   - Add `condition` field for contextual rules (e.g., `AcquisitionDuration` requires `VolumeTiming`)
+   - This formalizes the migration record schema (analogous to validator schemas, cf. dandi-cli)
+2. **Implement CLI filtering** (FR-030):
+   - `--level=safe` (default), `--level=advisory`, `--level=all`
+   - `--rule-id=ID` / `--exclude-rule=ID` for per-rule control
+   - `--mode=auto` (default: interactive when PTY, non-interactive otherwise), `--mode=non-interactive`, `--mode=interactive`
+   - Library API: `level`, `mode`, `rule_ids`, `exclude_rules` parameters on `migrate_dataset()`
+3. Implement migration rule engine in `migrate.py`:
+   - Scan deprecation markers from ALL schema levels (not just `rules/checks`):
+     - `rules/sidecars` — field-level `deprecated` annotations
+     - `rules/checks` — validator check rules
+     - `objects/metadata` — description-text deprecation markers
+     - `objects/enums` — deprecated enum values
+     - `objects/columns` — column-level deprecations
+     - `objects/suffixes` — deprecated suffixes
    - Determine dataset's current version (from `dataset_description.json`)
    - Determine target version (default: current released 1.x; or `--to`)
-   - Compute applicable rules (between source and target versions)
-2. Implement transformation handlers:
-   - **Metadata field rename**: `BasedOn` → `Sources`, etc.
-   - **Value format changes**: relative paths → BIDS URIs in `IntendedFor`, `Sources`, etc.
+   - Compute applicable rules (between source and target versions), filtered by level/id
+4. Implement transformation handlers — **safe level** (auto-applied by default):
+   - **Metadata field rename**: `BasedOn` → `Sources`, `RawSources` → `Sources`
+   - **Value format changes**: relative paths → BIDS URIs in `IntendedFor`, `AssociatedEmptyRoom`, `Sources`
+   - **DOI format**: bare DOIs → URI format in `DatasetDOI`
    - **Suffix deprecations**: `_phase` → `_part-phase_bold` (delegates to `rename`)
-   - **Enum value renames**: `ElektaNeuromag` → `NeuromagElektaMEGIN`
+   - **Enum value renames**: `ElektaNeuromag` → `NeuromagElektaMEGIN`, `KitYokogawa` → `YokogawaKIT`
    - **Cross-file moves**: `ScanDate` → `acq_time` in `_scans.tsv`
-3. Implement `cli/migrate.py`:
-   - `--to VERSION`, `--dry-run`, `--json`
-   - Report: per-file changes with deprecation rule references
-4. Tests:
+   - **Conditional field rename**: `AcquisitionDuration` → `FrameAcquisitionDuration` (only when `VolumeTiming` present) (FR-026)
+   - **TSV column value**: `"89+"` string → numeric `89` in `participants.tsv` `age` column, unit-aware (FR-027)
+5. Implement transformation handlers — **advisory level** (opt-in via `--level=advisory`):
+   - **Field removal**: `DCOffsetCorrection` deprecated in iEEG (FR-031)
+   - **Field removal**: `HardcopyDeviceSoftwareVersion` deprecated in MRI (FR-032)
+   - **HIPAA age cap**: numeric values > 89 → `89` in `age` column (rule id: `age_cap_89`)
+   - **Conditional field rename (ambiguous)**: `AcquisitionDuration` without `VolumeTiming` — prompt user
+6. Implement transformation handlers — **non-auto-fixable** (report only):
+   - **Ambiguous suffixes**: `T2star`, `FLASH`, `PD` — flag with replacement options
+   - **Deprecated templates**: `fsaverage3-6`, `fsaveragesym`, `UNCInfant*V2x` — flag, no clear auto-replacement
+7. **Age migration unit-awareness** (FR-027):
+   - Check `participants.json` sidecar for `"Units"` on the `age` column definition
+   - If units are non-year (months, days, etc.), skip the 89-year threshold rules and warn
+   - TODO: upstream resolution needed on column unit override mechanism (bids-standard/bids-specification#1633)
+8. Implement `cli/migrate.py`:
+   - `--to VERSION`, `--level LEVEL`, `--mode MODE`, `--rule-id ID`, `--exclude-rule ID`
+   - `--dry-run`, `--json`
+   - Report: per-file changes with rule references, grouped by level
+9. Tests:
    - Unit tests for each transformation type
    - Integration tests with crafted datasets containing known deprecations
    - `bids-examples` sweep: find datasets with older `BIDSVersion`, migrate, validate
+   - Test `--level` and `--mode` filtering
 
 **Dependencies**: Phase 2 complete (uses rename for suffix changes)
+
+### Phase 3b: Schema Deprecation Audit (FR-033, FR-034)
+
+**Goal**: Automated coverage tracking to ensure all schema-declared deprecations have corresponding migration rules.
+
+**Steps**:
+1. **Audit function** in `migrate.py`:
+   - Scan all deprecation markers in the loaded `bidsschematools` schema across all levels
+   - Compare against registered `MigrationRule` entries
+   - Return list of unimplemented deprecations with schema location
+   - Recommend: upgrade `bidsschematools` if not latest, or file an issue
+2. **CLI subcommand**: `bids-utils migrate --audit`
+   - Report: implemented vs missing migration rules, schema version
+3. **Test**: `test_migration_coverage_vs_schema` — fails when new schema deprecations appear without corresponding rules
+4. **GitHub issue template** (FR-034): `.github/ISSUE_TEMPLATE/missing-migration-rule.yml`
+   - Fields: schema version, deprecation location, affected field/suffix/enum, expected behavior
+   - Labels: `migration`, `schema-gap`
+
+**Dependencies**: Phase 3 complete (needs the migration registry to audit against)
+
+### Phase 3c: BIDS URI Fixup Helper (FR-025)
+
+**Goal**: Generic helper that updates `bids:` URIs when files are renamed, reusable across all operations.
+
+**Steps**:
+1. **Library function** in new `_bids_uri.py`:
+   - `update_bids_uris(dataset, old_to_new: dict[Path, Path], dry_run) -> list[Change]`
+   - Scan JSON metadata fields known to contain BIDS URIs: `IntendedFor`, `AssociatedEmptyRoom`, `Sources`, `DerivedFrom`
+   - Match `bids::` scheme URIs against the old→new mapping
+   - Update matched URIs
+2. **Wire into rename/migrate/subject-rename/session-rename**: call after file renames
+3. **Deferred**: cross-dataset URIs (`bids:ds001::...`), partial path matches
+4. Tests: unit tests with crafted JSON sidecars containing BIDS URIs
+
+**Dependencies**: Phase 1 complete (needs `_io.py` for JSON read/write)
 
 ### Phase 4: Migration — BIDS 2.0 (Story 3 — P1)
 
 **Goal**: `bids-utils migrate --to 2.0` handles 2.0 breaking changes.
 
 **Steps**:
-1. Extend migration rule engine for 2.0-specific transformations:
+1. **Concrete 2.0 rule** (FR-028, bids-standard/bids-2-devel#14):
+   - Rename `participants.tsv` → `subjects.tsv` (file rename via VCS)
+   - Rename `participants.json` → `subjects.json` (file rename via VCS)
+   - Rename `participant_id` column → `subject_id` in the renamed file
+   - Update `BIDSVersion` in `dataset_description.json`
+   - Update BIDS URIs referencing the old file via FR-025 helper
+2. Extend migration rule engine for additional 2.0-specific transformations:
    - Entity renames (TBD from schema)
    - Structural reorganization (TBD from schema)
    - Metadata key changes (TBD from schema)
-2. Ensure cumulative application: 1.x deprecations applied first, then 2.0 changes
-3. Handle ambiguities: flag items requiring human judgment, skip with clear reporting
-4. Tests:
+3. Ensure cumulative application: 1.x deprecations applied first, then 2.0 changes
+4. Handle ambiguities: flag items requiring human judgment, skip with clear reporting
+5. Tests:
+   - Unit tests for participants→subjects rename
    - Integration tests against 2.0-dev schema
    - Validate migrated datasets against 2.0 validator schema
 
-**Dependencies**: Phase 3 complete
-**Note**: Exact 2.0 transformations depend on BIDS 2.0 schema stabilization. This phase may need iteration as the schema evolves.
+**Dependencies**: Phase 3 + 3c complete
+**Note**: Additional 2.0 transformations depend on BIDS 2.0 schema stabilization. This phase will iterate as the schema evolves.
 
 ### Phase 5: Subject & Session Operations (Stories 4, 5 — P2)
 
@@ -343,10 +414,13 @@ tests/
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
 | `bidsschematools` API changes | Medium | High | Pin to compatible version range; abstract behind `_schema.py` |
-| BIDS 2.0 schema not finalized | High | Medium | Phase 4 is designed to iterate; 1.x migration is independently useful |
+| BIDS 2.0 schema not finalized | High | Medium | Phase 4 is designed to iterate; 1.x migration is independently useful. participants→subjects (issue #14) is concrete and implementable now. |
 | git-annex edge cases | Medium | Medium | Test with locked/unlocked files; handle gracefully when content unavailable |
 | Large dataset performance | Low | Medium | Profile early; use lazy evaluation; batch file operations |
 | Cross-platform path handling | Medium | Low | Use `pathlib` throughout; test on Windows CI |
+| Schema deprecation drift | Medium | Medium | FR-033 audit test fails on new deprecations; CI catches gaps automatically |
+| Age column units ambiguity | Medium | Low | Unit-aware migration; skip non-year units with warning; upstream issue bids-specification#1633 tracks resolution |
+| Advisory migration data loss | Low | High | Advisory rules require opt-in (`--level=advisory`); interactive mode prompts per-finding |
 
 ## Complexity Tracking
 

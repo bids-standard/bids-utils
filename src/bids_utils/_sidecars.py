@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from bids_utils._schema import BIDSSchema
+from bids_utils._types import _is_bids_data_entry
 
 # Compound extensions that need special handling
 _COMPOUND_EXTS = {".nii.gz", ".tsv.gz"}
@@ -26,11 +27,19 @@ def find_sidecars(
     file_path: Path,
     schema: BIDSSchema | None = None,
 ) -> list[Path]:
-    """Find all sidecar files associated with a BIDS file.
+    """Find all **same-directory** sidecar files associated with a BIDS file.
 
-    Given a primary data file (e.g., sub-01_task-rest_bold.nii.gz),
-    returns all existing sidecar files in the same directory
-    (e.g., sub-01_task-rest_bold.json, .bvec, .bval).
+    Given a primary data file (e.g., ``sub-01_task-rest_bold.nii.gz``),
+    returns all existing files in the **same directory** that share the
+    same stem (e.g., ``.json``, ``.bvec``, ``.bval``, ``.tsv`` label
+    tables, BrainVision companions ``.eeg``/``.vhdr``/``.vmrk``).
+
+    .. note::
+
+       This function does **not** walk the BIDS inheritance hierarchy.
+       Higher-level sidecars (e.g., a ``task-rest_bold.json`` at the
+       dataset root) are not returned.  For inheritance-aware metadata
+       resolution, see ``metadata.py``.
 
     Parameters
     ----------
@@ -58,12 +67,29 @@ def find_sidecars(
         # Default: check common sidecar extensions
         check_exts = [".json", ".bvec", ".bval"]
 
+    # Start with schema-known sidecar extensions
     sidecars: list[Path] = []
+    seen_exts: set[str] = {ext}  # skip the primary file's own extension
     for sidecar_ext in check_exts:
-        if sidecar_ext == ext:
-            continue  # Skip the primary file's own extension
+        if sidecar_ext in seen_exts:
+            continue
+        seen_exts.add(sidecar_ext)
         candidate = parent / f"{stem}{sidecar_ext}"
         if candidate.exists() or candidate.is_symlink():
             sidecars.append(candidate)
+
+    # For data files (not sidecars themselves), also discover all same-stem
+    # companions.  This catches multi-file formats like BrainVision
+    # (.eeg + .vhdr + .vmrk), companion label tables (.tsv for dseg),
+    # and any other same-stem companions the schema doesn't list.
+    sidecar_only_exts = {".json", ".bvec", ".bval"}
+    if ext not in sidecar_only_exts:
+        for sibling in parent.iterdir():
+            if not _is_bids_data_entry(sibling):
+                continue
+            sib_stem, sib_ext = _split_extension(sibling.name)
+            if sib_stem == stem and sib_ext not in seen_exts:
+                seen_exts.add(sib_ext)
+                sidecars.append(sibling)
 
     return sidecars

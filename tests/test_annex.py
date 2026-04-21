@@ -140,3 +140,45 @@ class TestFileRenameAnnex:
         new_bold = bold.parent / "sub-01_ses-pre_task-nback_bold.nii.gz"
         assert new_bold.exists() or new_bold.is_symlink()
         assert not bold.exists() and not bold.is_symlink()
+
+    @pytest.mark.ai_generated
+    def test_rename_updates_scans_tsv(
+        self, tmp_annex_dataset: Path
+    ) -> None:
+        """Renaming a file must update _scans.tsv even when it's annexed."""
+        from bids_utils._dataset import BIDSDataset
+        from bids_utils._scans import read_scans_tsv
+        from bids_utils._types import AnnexedMode
+        from bids_utils.rename import rename_file
+
+        ds = BIDSDataset.from_path(tmp_annex_dataset)
+        ds.annexed_mode = AnnexedMode.GET  # need content to read scans
+        bold = (
+            tmp_annex_dataset
+            / "sub-01"
+            / "ses-pre"
+            / "func"
+            / "sub-01_ses-pre_task-rest_bold.nii.gz"
+        )
+        result = rename_file(ds, bold, set_entities={"task": "nback"})
+        assert result.success, result.errors
+
+        # Check _scans.tsv was updated
+        scans = (
+            tmp_annex_dataset
+            / "sub-01"
+            / "ses-pre"
+            / "sub-01_ses-pre_scans.tsv"
+        )
+        rows = read_scans_tsv(scans)
+        filenames = [r.get("filename", "") for r in rows]
+        assert any("task-nback" in fn for fn in filenames), (
+            f"_scans.tsv not updated: {filenames}"
+        )
+        assert not any("task-rest_bold" in fn for fn in filenames), (
+            f"Old filename still in _scans.tsv: {filenames}"
+        )
+
+        new_bold = bold.parent / "sub-01_ses-pre_task-nback_bold.nii.gz"
+        assert new_bold.exists() or new_bold.is_symlink()
+        assert not bold.exists() and not bold.is_symlink()

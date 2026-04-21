@@ -5,11 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from bids_utils._dataset import BIDSDataset
+from bids_utils._io import update_json_references
 from bids_utils._participants import remove_participant, rename_participant
 from bids_utils._scans import read_scans_tsv, write_scans_tsv
 from bids_utils._types import (
     Change,
     OperationResult,
+    _is_bids_data_entry,
     normalize_subject_id,
     rename_change,
     require_subject_dir,
@@ -45,10 +47,11 @@ def rename_subject(
         result.errors.append(f"Target subject already exists: {new_dir}")
         return result
 
-    # Collect all files that need renaming
+    # Collect all files that need renaming (including directory-based files
+    # like .ds and .zarr which are BIDS data "files" stored as directories)
     files_to_rename: list[Path] = []
     for f in sorted(old_dir.rglob("*")):
-        if not f.is_dir() and old_id in f.name:
+        if _is_bids_data_entry(f) and old_id in f.name:
             files_to_rename.append(f)
 
     # Record directory rename
@@ -95,9 +98,11 @@ def rename_subject(
     vcs = dataset.vcs
     vcs.move(old_dir, new_dir)
 
-    # Rename files within the new directory
+    # Rename files within the new directory in reverse order (children
+    # before parents so files inside .ds/.zarr dirs are renamed before
+    # the directory itself is moved)
     for f in sorted(new_dir.rglob("*"), reverse=True):
-        if not f.is_dir() and old_id in f.name:
+        if _is_bids_data_entry(f) and old_id in f.name:
             new_name = f.name.replace(old_id, new_id)
             new_path = f.parent / new_name
             if f != new_path:
@@ -121,6 +126,11 @@ def rename_subject(
         rename_participant(
             participants, old_id, new_id, vcs=vcs, annexed_mode=amode
         )
+
+    # Update IntendedFor / AssociatedEmptyRoom / Sources references
+    update_json_references(
+        dataset.root, old_id, new_id, vcs=vcs, annexed_mode=amode
+    )
 
     # Handle sourcedata if requested
     if include_sourcedata:
