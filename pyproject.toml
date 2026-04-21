@@ -34,10 +34,11 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
+    "bids-validator-deno>=2.0",
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "pytest-timeout>=2.0",
-    "bids-validator-deno>=2.0",
+    "pytest-xdist>=3.0",
 ]
 devel = [
     "bids-utils[test]",
