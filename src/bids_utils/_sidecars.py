@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from bids_utils._schema import BIDSSchema
+from bids_utils._types import _is_bids_data_entry
 
 # Compound extensions that need special handling
 _COMPOUND_EXTS = {".nii.gz", ".tsv.gz"}
@@ -84,7 +85,7 @@ def find_sidecars(
     sidecar_only_exts = {".json", ".bvec", ".bval"}
     if ext not in sidecar_only_exts:
         for sibling in parent.iterdir():
-            if sibling.is_dir():
+            if not _is_bids_data_entry(sibling):
                 continue
             sib_stem, sib_ext = _split_extension(sibling.name)
             if sib_stem == stem and sib_ext not in seen_exts:

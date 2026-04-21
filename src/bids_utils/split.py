@@ -6,7 +6,7 @@ import shutil
 from pathlib import Path
 
 from bids_utils._dataset import BIDSDataset
-from bids_utils._types import Change, OperationResult
+from bids_utils._types import Change, OperationResult, _is_bids_data_entry
 
 
 def split_dataset(
@@ -55,7 +55,7 @@ def split_dataset(
 
     # Walk through all files
     for f in sorted(dataset.root.rglob("*")):
-        if f.is_dir():
+        if not _is_bids_data_entry(f):
             continue
         if f.name == "dataset_description.json":
             continue

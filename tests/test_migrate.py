@@ -1,4 +1,41 @@
-"""Tests for migrate.py — schema-driven migration."""
+"""Tests for migrate.py — schema-driven migration.
+
+Migration rule test matrix (T125)
+---------------------------------
+
+BIDS 1.x migration rules fall into two coverage categories:
+
+* **Real-world fixtures (bids-examples).** These deprecation patterns
+  appear in the pinned ``bids-examples`` tree and are exercised by the
+  integration sweep in ``tests/integration/``:
+
+    - ``IntendedFor`` relative-path → BIDS URI (path_format)
+    - ``AssociatedEmptyRoom`` relative-path → BIDS URI (path_format)
+    - ``RawSources`` → ``Sources`` field rename
+    - ``ElektaNeuromag`` → ``NeuromagElektaMEGIN`` enum rename
+    - ``SoftwareFilters`` schema presence (used as merge target)
+    - ``DatasetDOI`` bare DOI → ``doi:`` URI
+    - ``AcquisitionDuration`` → ``FrameAcquisitionDuration``
+
+* **Synthetic fixtures (in this file).** The schema declares these
+  deprecations but ``bids-examples`` lacks representative data, so the
+  tests below construct the minimal JSON/TSV directly:
+
+    - ``DCOffsetCorrection`` → ``SoftwareFilters`` structural migration
+      (T105)
+    - ``BasedOn`` → ``Sources`` field rename
+    - ``ScanDate`` → ``_scans.tsv`` ``acq_time`` cross-file move
+      (including the missing-``_scans.tsv`` path from T036)
+    - ``HardcopyDeviceSoftwareVersion`` advisory removal
+    - ``_phase`` suffix → ``part-phase_bold``
+    - ``_T2star`` / ``_FLASH`` / ``_PD`` ambiguous suffix deprecations
+    - ``"89+"`` age string → numeric, HIPAA age cap to 89
+    - Deprecated templates (``fsaverage3``–``fsaverage6``,
+      ``fsaveragesym``, ``UNCInfant*``)
+
+When a new rule is added, cover it here if ``bids-examples`` lacks a
+concrete instance; otherwise prefer extending the integration sweep.
+"""
 
 import json
 from pathlib import Path
@@ -55,6 +92,93 @@ class TestFieldRename:
         result = migrate_dataset(ds)
 
         assert any("RawSources" in str(f.current_value) for f in result.findings)
+
+    @pytest.mark.ai_generated
+    def test_sources_merge_mixed_types(self, tmp_path: Path) -> None:
+        """Existing Sources as string + incoming array must merge, not be dropped."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        func = ds_path / "sub-01" / "func"
+        func.mkdir(parents=True)
+        sidecar = func / "sub-01_task-rest_bold.json"
+        sidecar.write_text(
+            json.dumps(
+                {
+                    "Sources": "existing_source.nii",
+                    "BasedOn": ["new_source_a.nii", "new_source_b.nii"],
+                }
+            )
+        )
+
+        ds = BIDSDataset.from_path(ds_path)
+        migrate_dataset(ds)
+
+        data = json.loads(sidecar.read_text())
+        assert "BasedOn" not in data
+        assert isinstance(data["Sources"], list)
+        assert set(data["Sources"]) == {
+            "existing_source.nii",
+            "new_source_a.nii",
+            "new_source_b.nii",
+        }
+
+    @pytest.mark.ai_generated
+    def test_sources_three_way_merge(self, tmp_path: Path) -> None:
+        """BasedOn + RawSources + existing Sources all merge into Sources."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        func = ds_path / "sub-01" / "func"
+        func.mkdir(parents=True)
+        sidecar = func / "sub-01_task-rest_bold.json"
+        sidecar.write_text(
+            json.dumps(
+                {
+                    "Sources": ["orig.nii"],
+                    "BasedOn": ["basedon.nii"],
+                    "RawSources": ["rawsources.nii"],
+                }
+            )
+        )
+
+        ds = BIDSDataset.from_path(ds_path)
+        migrate_dataset(ds)
+
+        data = json.loads(sidecar.read_text())
+        assert "BasedOn" not in data
+        assert "RawSources" not in data
+        assert isinstance(data["Sources"], list)
+        assert set(data["Sources"]) == {
+            "orig.nii",
+            "basedon.nii",
+            "rawsources.nii",
+        }
+
+    @pytest.mark.ai_generated
+    def test_sources_three_way_merge_mixed_types(self, tmp_path: Path) -> None:
+        """3-way merge: string Sources + list BasedOn + string RawSources."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        func = ds_path / "sub-01" / "func"
+        func.mkdir(parents=True)
+        sidecar = func / "sub-01_task-rest_bold.json"
+        sidecar.write_text(
+            json.dumps(
+                {
+                    "Sources": "orig.nii",
+                    "BasedOn": ["basedon_a.nii", "basedon_b.nii"],
+                    "RawSources": "rawsources.nii",
+                }
+            )
+        )
+
+        ds = BIDSDataset.from_path(ds_path)
+        migrate_dataset(ds)
+
+        data = json.loads(sidecar.read_text())
+        assert isinstance(data["Sources"], list)
+        assert set(data["Sources"]) == {
+            "orig.nii",
+            "basedon_a.nii",
+            "basedon_b.nii",
+            "rawsources.nii",
+        }
 
 
 class TestEnumRename:
@@ -161,6 +285,58 @@ class TestScanDateMove:
 
         rows = read_scans_tsv(scans)
         assert rows[0]["acq_time"] == "2020-01-15"
+
+    @pytest.mark.ai_generated
+    def test_scandate_creates_scans_tsv_when_missing(self, tmp_path: Path) -> None:
+        """If no _scans.tsv exists, one is created to avoid data loss."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        sub = ds_path / "sub-01" / "func"
+        sub.mkdir(parents=True)
+        sidecar = sub / "sub-01_task-rest_bold.json"
+        sidecar.write_text(json.dumps({"ScanDate": "2020-06-01"}))
+        # data file present so the TSV filename entry resolves naturally
+        (sub / "sub-01_task-rest_bold.nii.gz").write_bytes(b"")
+
+        # No _scans.tsv exists anywhere
+        assert not (ds_path / "sub-01" / "sub-01_scans.tsv").exists()
+
+        ds = BIDSDataset.from_path(ds_path)
+        migrate_dataset(ds)
+
+        # JSON no longer carries ScanDate
+        data = json.loads(sidecar.read_text())
+        assert "ScanDate" not in data
+
+        # A _scans.tsv was created with the correct acq_time and filename
+        from bids_utils._scans import read_scans_tsv
+
+        scans = ds_path / "sub-01" / "sub-01_scans.tsv"
+        assert scans.exists()
+        rows = read_scans_tsv(scans)
+        assert len(rows) == 1
+        assert rows[0]["acq_time"] == "2020-06-01"
+        assert rows[0]["filename"] == "func/sub-01_task-rest_bold.nii.gz"
+
+    @pytest.mark.ai_generated
+    def test_scandate_creates_scans_tsv_with_session(self, tmp_path: Path) -> None:
+        """Multi-session datasets get a session-level _scans.tsv created."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        ses = ds_path / "sub-01" / "ses-pre" / "func"
+        ses.mkdir(parents=True)
+        sidecar = ses / "sub-01_ses-pre_task-rest_bold.json"
+        sidecar.write_text(json.dumps({"ScanDate": "2020-08-10"}))
+        (ses / "sub-01_ses-pre_task-rest_bold.nii.gz").write_bytes(b"")
+
+        ds = BIDSDataset.from_path(ds_path)
+        migrate_dataset(ds)
+
+        from bids_utils._scans import read_scans_tsv
+
+        scans = ds_path / "sub-01" / "ses-pre" / "sub-01_ses-pre_scans.tsv"
+        assert scans.exists()
+        rows = read_scans_tsv(scans)
+        assert rows[0]["acq_time"] == "2020-08-10"
+        assert rows[0]["filename"] == "func/sub-01_ses-pre_task-rest_bold.nii.gz"
 
 
 class TestDryRun:
@@ -570,13 +746,13 @@ class TestMigrationLevels:
         ds_path = _make_dataset(tmp_path, "1.4.0")
         func = ds_path / "sub-01" / "func"
         func.mkdir(parents=True)
-        # BasedOn is safe; DCOffsetCorrection is advisory
+        # BasedOn is safe; HardcopyDeviceSoftwareVersion is advisory (MRI)
         sidecar = func / "sub-01_task-rest_bold.json"
         sidecar.write_text(
             json.dumps(
                 {
                     "BasedOn": ["sub-01/anat/sub-01_T1w.nii.gz"],
-                    "DCOffsetCorrection": "none",
+                    "HardcopyDeviceSoftwareVersion": "1.0",
                 }
             )
         )
@@ -586,7 +762,7 @@ class TestMigrationLevels:
 
         rule_ids = {f.rule.id for f in result.findings}
         assert "field_rename_BasedOn_to_Sources" in rule_ids
-        assert "field_removal_DCOffsetCorrection" not in rule_ids
+        assert "field_removal_HardcopyDeviceSoftwareVersion" not in rule_ids
 
     @pytest.mark.ai_generated
     def test_level_advisory_includes_safe(self, tmp_path: Path) -> None:
@@ -599,7 +775,7 @@ class TestMigrationLevels:
             json.dumps(
                 {
                     "BasedOn": ["sub-01/anat/sub-01_T1w.nii.gz"],
-                    "DCOffsetCorrection": "none",
+                    "HardcopyDeviceSoftwareVersion": "1.0",
                 }
             )
         )
@@ -609,7 +785,7 @@ class TestMigrationLevels:
 
         rule_ids = {f.rule.id for f in result.findings}
         assert "field_rename_BasedOn_to_Sources" in rule_ids
-        assert "field_removal_DCOffsetCorrection" in rule_ids
+        assert "field_removal_HardcopyDeviceSoftwareVersion" in rule_ids
 
     @pytest.mark.ai_generated
     def test_level_all_includes_everything(self, tmp_path: Path) -> None:
@@ -743,10 +919,14 @@ class TestAcquisitionDuration:
         assert not acq_findings[0].can_auto_fix
 
 
-class TestFieldRemoval:
+class TestDCOffsetCorrectionMigration:
+    """DCOffsetCorrection → SoftwareFilters.DCOffsetCorrection.description (T105)."""
+
     @pytest.mark.ai_generated
-    def test_dcoffsetcorrection_removed_at_advisory(self, tmp_path: Path) -> None:
-        """DCOffsetCorrection removed when level=advisory."""
+    def test_standalone_dcoffset_nested_under_softwarefilters(
+        self, tmp_path: Path
+    ) -> None:
+        """DCOffsetCorrection alone is moved into SoftwareFilters at level=safe."""
         ds_path = _make_dataset(tmp_path, "1.4.0")
         ieeg = ds_path / "sub-01" / "ieeg"
         ieeg.mkdir(parents=True)
@@ -754,18 +934,73 @@ class TestFieldRemoval:
         sidecar.write_text(json.dumps({"DCOffsetCorrection": "none"}))
 
         ds = BIDSDataset.from_path(ds_path)
-        result = migrate_dataset(ds, level="advisory")
+        result = migrate_dataset(ds, level="safe")
 
-        removal_findings = [
+        nest_findings = [
             f
             for f in result.findings
-            if f.rule.id == "field_removal_DCOffsetCorrection"
+            if f.rule.id == "dcoffset_to_softwarefilters"
         ]
-        assert removal_findings
+        assert nest_findings
+        assert nest_findings[0].can_auto_fix
 
         data = json.loads(sidecar.read_text())
         assert "DCOffsetCorrection" not in data
+        assert data["SoftwareFilters"] == {
+            "DCOffsetCorrection": {"description": "none"}
+        }
 
+    @pytest.mark.ai_generated
+    def test_merge_into_existing_softwarefilters_dict(
+        self, tmp_path: Path
+    ) -> None:
+        """DCOffsetCorrection is merged into an existing SoftwareFilters dict."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        ieeg = ds_path / "sub-01" / "ieeg"
+        ieeg.mkdir(parents=True)
+        sidecar = ieeg / "sub-01_task-rest_ieeg.json"
+        sidecar.write_text(
+            json.dumps(
+                {
+                    "DCOffsetCorrection": "none",
+                    "SoftwareFilters": {
+                        "HighPass": {"description": "0.1 Hz"},
+                    },
+                }
+            )
+        )
+
+        ds = BIDSDataset.from_path(ds_path)
+        migrate_dataset(ds, level="safe")
+
+        data = json.loads(sidecar.read_text())
+        assert "DCOffsetCorrection" not in data
+        # Existing entry preserved
+        assert data["SoftwareFilters"]["HighPass"] == {"description": "0.1 Hz"}
+        # New nested entry added
+        assert data["SoftwareFilters"]["DCOffsetCorrection"] == {
+            "description": "none"
+        }
+
+    @pytest.mark.ai_generated
+    def test_non_ieeg_sidecar_not_migrated(self, tmp_path: Path) -> None:
+        """DCOffsetCorrection in a non-iEEG sidecar is not touched."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        func = ds_path / "sub-01" / "func"
+        func.mkdir(parents=True)
+        sidecar = func / "sub-01_task-rest_bold.json"
+        original = json.dumps({"DCOffsetCorrection": "none"})
+        sidecar.write_text(original)
+
+        ds = BIDSDataset.from_path(ds_path)
+        migrate_dataset(ds, level="safe")
+
+        data = json.loads(sidecar.read_text())
+        # Scope is iEEG only (FR-031) — func sidecars remain untouched
+        assert data == {"DCOffsetCorrection": "none"}
+
+
+class TestFieldRemoval:
     @pytest.mark.ai_generated
     def test_hardcopydevicesoftwareversion_removed_at_advisory(
         self, tmp_path: Path

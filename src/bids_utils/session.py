@@ -5,7 +5,11 @@ from __future__ import annotations
 from bids_utils._dataset import BIDSDataset
 from bids_utils._io import update_json_references
 from bids_utils._scans import read_scans_tsv, write_scans_tsv
-from bids_utils._types import Change, OperationResult, is_bids_dir_file
+from bids_utils._types import (
+    Change,
+    OperationResult,
+    _is_bids_data_entry,
+)
 
 
 def rename_session(
@@ -82,9 +86,7 @@ def rename_session(
             new_label = new_id
             file_renames: list[tuple[str, str]] = []
             for f in sorted(old_ses_dir.rglob("*"), reverse=True):
-                if (
-                    is_bids_dir_file(f) or not f.is_dir()
-                ) and old_label in f.name:
+                if _is_bids_data_entry(f) and old_label in f.name:
                     new_name = f.name.replace(old_label, new_label)
                     if f.name != new_name:
                         # Record with paths relative to old_ses_dir
@@ -118,9 +120,7 @@ def rename_session(
             # Rename files within the session (reverse order: children
             # before parents so files inside .ds/.zarr get renamed first)
             for f in sorted(new_ses_dir.rglob("*"), reverse=True):
-                if (
-                    is_bids_dir_file(f) or not f.is_dir()
-                ) and old_label in f.name:
+                if _is_bids_data_entry(f) and old_label in f.name:
                     new_name = f.name.replace(old_label, new_label)
                     new_path = f.parent / new_name
                     if f != new_path:
@@ -193,7 +193,7 @@ def rename_session(
             new_ses_label = new_id
             for dt_dir in datatype_dirs:
                 for f in sorted(dt_dir.rglob("*")):
-                    if f.is_dir() and not is_bids_dir_file(f):
+                    if not _is_bids_data_entry(f):
                         continue
                     if sub_name in f.name and new_ses_label not in f.name:
                         new_name = f.name.replace(
@@ -223,7 +223,7 @@ def rename_session(
             # before parents so files inside .ds/.zarr get renamed first)
             for f in sorted(new_ses_dir.rglob("*"), reverse=True):
                 if (
-                    (is_bids_dir_file(f) or not f.is_dir())
+                    _is_bids_data_entry(f)
                     and sub_name in f.name
                     and new_ses_label not in f.name
                 ):

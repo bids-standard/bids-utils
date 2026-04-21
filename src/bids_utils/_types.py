@@ -6,7 +6,10 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from bids_utils._schema import BIDSSchema
 
 
 class AnnexedMode(Enum):
@@ -147,7 +150,9 @@ class BIDSPath:
         )
 
     def to_filename(
-        self, entity_order: list[str] | None = None
+        self,
+        entity_order: list[str] | None = None,
+        schema: BIDSSchema | None = None,
     ) -> str:
         """Reconstruct the BIDS filename from components.
 
@@ -157,7 +162,14 @@ class BIDSPath:
             When provided, entities are emitted in this order.  Keys not
             present in the list are appended at the end in their original
             (insertion) order.
+        schema
+            When provided and *entity_order* is not, entities are emitted
+            in the schema-defined order (``BIDSSchema.entity_order()``).
+            Unknown keys are appended in insertion order.  When neither
+            is given, insertion order is preserved.
         """
+        if entity_order is None and schema is not None:
+            entity_order = schema.entity_order()
         if entity_order is not None:
             order_index = {k: i for i, k in enumerate(entity_order)}
             sentinel = len(entity_order)
@@ -173,7 +185,9 @@ class BIDSPath:
         return "_".join(parts) + self.extension
 
     def to_relative_path(
-        self, entity_order: list[str] | None = None
+        self,
+        entity_order: list[str] | None = None,
+        schema: BIDSSchema | None = None,
     ) -> Path:
         """Reconstruct a relative path including sub-/ses-/datatype dirs."""
         parts: list[str] = []
@@ -183,7 +197,7 @@ class BIDSPath:
             parts.append(f"ses-{self.entities['ses']}")
         if self.datatype:
             parts.append(self.datatype)
-        parts.append(self.to_filename(entity_order=entity_order))
+        parts.append(self.to_filename(entity_order=entity_order, schema=schema))
         return Path(*parts)
 
     def with_entities(self, **overrides: str) -> BIDSPath:
@@ -269,6 +283,26 @@ def is_bids_dir_file(path: Path) -> bool:
         return False
     name = path.name
     return any(name.endswith(ext) for ext in _BIDS_DIR_FILE_EXTENSIONS)
+
+
+def _is_bids_data_entry(path: Path) -> bool:
+    """Return True when *path* is a BIDS data entry for iteration.
+
+    Covers three cases per FR-036:
+
+    * regular files,
+    * symlinks (annexed files with or without content, per FR-023),
+    * directories matching BIDS directory-as-file patterns
+      (``.ds``, ``.zarr``, ``.ome.zarr``).
+
+    Plain directories (``sub-01/``, ``func/``) are excluded so callers
+    can recurse into them without treating them as data.
+    """
+    if is_bids_dir_file(path):
+        return True
+    # Regular files, symlinks (to files or broken), and anything else
+    # that is not a directory qualifies.
+    return not path.is_dir()
 
 
 def normalize_subject_id(label: str) -> str:

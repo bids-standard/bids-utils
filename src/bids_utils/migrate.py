@@ -18,7 +18,7 @@ from bids_utils._io import read_json as _read_json
 from bids_utils._io import write_json as _write_json
 from bids_utils._participants import read_participants_tsv, write_participants_tsv
 from bids_utils._scans import find_scans_tsv, read_scans_tsv, write_scans_tsv
-from bids_utils._types import AnnexedMode, BIDSPath, Change
+from bids_utils._types import AnnexedMode, BIDSPath, Change, _is_bids_data_entry
 from bids_utils._vcs import VCSBackend
 
 # ---------------------------------------------------------------------------
@@ -382,17 +382,21 @@ _register_rule(
     )
 )
 
-# Field removals (deprecated fields)
+# Structural migration: DCOffsetCorrection -> SoftwareFilters sub-entry
 _register_rule(
     MigrationRule(
-        id="field_removal_DCOffsetCorrection",
+        id="dcoffset_to_softwarefilters",
         from_version="1.6.0",
-        level="advisory",
-        category="field_removal",
-        description="Remove deprecated 'DCOffsetCorrection' field (iEEG)",
+        level="safe",
+        category="field_nest",
+        description=(
+            "Move 'DCOffsetCorrection' into SoftwareFilters sub-entry (iEEG)"
+        ),
         old_field="DCOffsetCorrection",
+        new_field="SoftwareFilters",
     )
 )
+# Field removals (deprecated fields)
 _register_rule(
     MigrationRule(
         id="field_removal_HardcopyDeviceSoftwareVersion",
@@ -631,7 +635,7 @@ def _scan_bids_files(dataset_root: Path) -> list[Path]:
     """Find all BIDS data files (non-JSON, non-TSV) in the dataset."""
     results: list[Path] = []
     for p in sorted(dataset_root.rglob("*")):
-        if p.is_dir():
+        if not _is_bids_data_entry(p):
             continue
         # Skip non-BIDS directories
         rel = p.relative_to(dataset_root)
@@ -750,6 +754,44 @@ def _scan_for_field_removal(
                     file=jf,
                     current_value=f"{rule.old_field}: {data[rule.old_field]}",
                     proposed_value=f"Remove '{rule.old_field}'",
+                    can_auto_fix=True,
+                )
+            )
+    return findings
+
+
+def _scan_for_field_nest(
+    json_files: list[Path],
+    rule: MigrationRule,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR,
+) -> list[MigrationFinding]:
+    """Scan for fields that should be nested under another metadata key.
+
+    Currently targets the iEEG DCOffsetCorrection → SoftwareFilters
+    structural migration: restricted to sidecars in an ``ieeg`` datatype
+    directory.
+    """
+    findings: list[MigrationFinding] = []
+    if not rule.old_field or not rule.new_field:
+        return findings
+    for jf in json_files:
+        # Restrict to iEEG sidecars (scope per FR-031)
+        if jf.parent.name != "ieeg":
+            continue
+        data = _read_json_safe(jf, vcs, annexed_mode)
+        if data is None:
+            continue
+        if rule.old_field in data:
+            findings.append(
+                MigrationFinding(
+                    rule=rule,
+                    file=jf,
+                    current_value=f"{rule.old_field}: {data[rule.old_field]}",
+                    proposed_value=(
+                        f"{rule.new_field}.{rule.old_field}.description: "
+                        f"{data[rule.old_field]}"
+                    ),
                     can_auto_fix=True,
                 )
             )
@@ -982,6 +1024,52 @@ def _apply_field_removal(
     return None
 
 
+def _apply_field_nest(
+    finding: MigrationFinding,
+    vcs: VCSBackend | None = None,
+    annexed_mode: AnnexedMode = AnnexedMode.ERROR,
+) -> Change | None:
+    """Move a flat field into a nested dict under ``new_field``.
+
+    For DCOffsetCorrection: produces
+    ``SoftwareFilters[DCOffsetCorrection] = {"description": value}``.
+    Preserves an existing ``SoftwareFilters`` dict and does not overwrite
+    an existing nested description.
+    """
+    jf = finding.file
+    data = _read_json_safe(jf, vcs, annexed_mode)
+    if data is None:
+        return None
+    rule = finding.rule
+    if not rule.old_field or not rule.new_field:
+        return None
+    if rule.old_field not in data:
+        return None
+    value = data.pop(rule.old_field)
+    container = data.get(rule.new_field)
+    if not isinstance(container, dict):
+        container = {}
+    existing_entry = container.get(rule.old_field)
+    if isinstance(existing_entry, dict):
+        existing_entry.setdefault("description", value)
+    else:
+        container[rule.old_field] = {"description": value}
+    data[rule.new_field] = container
+    if vcs is not None:
+        _write_json(jf, data, vcs)
+    else:
+        jf.write_text(
+            json.dumps(data, indent=2) + "\n", encoding="utf-8"
+        )
+    return Change(
+        action="modify",
+        source=jf,
+        detail=(
+            f"Moved '{rule.old_field}' into '{rule.new_field}' sub-entry"
+        ),
+    )
+
+
 def _apply_age_column(
     finding: MigrationFinding,
     dataset_root: Path,
@@ -1040,18 +1128,20 @@ def _apply_field_rename(
     rule = finding.rule
     if rule.old_field and rule.old_field in data:
         value = data.pop(rule.old_field)
-        # Merge into new field (handle Sources consolidation)
+        # Merge into new field (handle Sources consolidation).
+        # Normalize both sides to lists so mixed string/array types merge
+        # correctly; 3-way merges (e.g. Sources + BasedOn + RawSources) work
+        # iteratively as each rule runs.
         if rule.new_field:
             existing = data.get(rule.new_field)
-            if existing is not None:
-                # Merge lists
-                if isinstance(existing, list) and isinstance(value, list):
-                    data[rule.new_field] = existing + value
-                elif isinstance(existing, list):
-                    data[rule.new_field] = existing + [value]
-                # else: existing value takes precedence
-            else:
+            if existing is None:
                 data[rule.new_field] = value
+            else:
+                existing_list = (
+                    list(existing) if isinstance(existing, list) else [existing]
+                )
+                value_list = list(value) if isinstance(value, list) else [value]
+                data[rule.new_field] = existing_list + value_list
         if vcs is not None:
             _write_json(jf, data, vcs)
         else:
@@ -1139,13 +1229,78 @@ def _apply_path_format(
     return None
 
 
+def _default_scans_tsv_path(jf: Path, dataset_root: Path) -> Path | None:
+    """Compute the canonical ``_scans.tsv`` location for a sidecar.
+
+    Uses the sidecar's ``sub``/``ses`` entities to derive the conventional
+    path (e.g. ``sub-01/ses-pre/sub-01_ses-pre_scans.tsv``).  Returns
+    ``None`` if the sidecar does not carry a subject entity.
+    """
+    try:
+        bp = BIDSPath.from_path(jf)
+    except Exception:
+        return None
+    sub = bp.entities.get("sub")
+    if not sub:
+        return None
+    ses = bp.entities.get("ses")
+    if ses:
+        container = dataset_root / f"sub-{sub}" / f"ses-{ses}"
+        name = f"sub-{sub}_ses-{ses}_scans.tsv"
+    else:
+        container = dataset_root / f"sub-{sub}"
+        name = f"sub-{sub}_scans.tsv"
+    return container / name
+
+
+def _scans_tsv_filename_entry(jf: Path, scans_path: Path) -> str:
+    """Build the ``filename`` column entry for a sidecar row.
+
+    Looks for a sibling data file (non-JSON, non-TSV) sharing the
+    sidecar's stem; falls back to the sidecar's stem with ``.nii.gz``
+    when none is found (synthetic datasets, JSON-only sidecars).
+    """
+    stem = jf.stem
+    data_name: str | None = None
+    if jf.parent.exists():
+        for sibling in sorted(jf.parent.iterdir()):
+            if sibling.name == jf.name:
+                continue
+            if sibling.suffix in (".json", ".tsv"):
+                continue
+            if not _is_bids_data_entry(sibling):
+                continue
+            sib_stem = sibling.name
+            # Strip compound extensions for comparison
+            for ext in (".nii.gz", ".tsv.gz"):
+                if sib_stem.endswith(ext):
+                    sib_stem = sib_stem[: -len(ext)]
+                    break
+            else:
+                sib_stem = Path(sibling.name).stem
+            if sib_stem == stem:
+                data_name = sibling.name
+                break
+    if data_name is None:
+        data_name = f"{stem}.nii.gz"
+    try:
+        return str(jf.parent.joinpath(data_name).relative_to(scans_path.parent))
+    except ValueError:
+        return data_name
+
+
 def _apply_scandate_move(
     finding: MigrationFinding,
     dataset_root: Path,
     vcs: VCSBackend | None = None,
     annexed_mode: AnnexedMode = AnnexedMode.ERROR,
 ) -> Change | None:
-    """Move ScanDate from JSON to _scans.tsv acq_time."""
+    """Move ScanDate from JSON to _scans.tsv acq_time.
+
+    If no ``_scans.tsv`` exists yet for the subject/session, one is
+    created with the required ``filename``/``acq_time`` headers so the
+    ScanDate value is never dropped silently.
+    """
     jf = finding.file
     data = _read_json_safe(jf, vcs, annexed_mode)
     if data is None:
@@ -1160,27 +1315,55 @@ def _apply_scandate_move(
     else:
         jf.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
-    # Try to find the corresponding _scans.tsv and update acq_time
+    # Try to find the corresponding _scans.tsv; create one if missing.
     scans_path = find_scans_tsv(jf, dataset_root)
-    if scans_path is not None:
+    created_new = False
+    if scans_path is None:
+        scans_path = _default_scans_tsv_path(jf, dataset_root)
+        if scans_path is None:
+            # Cannot safely place a scans file — restore ScanDate rather
+            # than drop it silently.
+            data["ScanDate"] = scan_date
+            if vcs is not None:
+                _write_json(jf, data, vcs)
+            else:
+                jf.write_text(
+                    json.dumps(data, indent=2) + "\n", encoding="utf-8"
+                )
+            return None
+        scans_path.parent.mkdir(parents=True, exist_ok=True)
+        created_new = True
+
+    if created_new:
+        rows: list[dict[str, str]] = []
+    else:
         rows = read_scans_tsv(
             scans_path, vcs=vcs, annexed_mode=annexed_mode
         )
-        # Find the data file that corresponds to this JSON
-        stem = jf.stem  # e.g., sub-01_bold
-        for row in rows:
-            fn = row.get("filename", "")
-            if fn.replace(".nii.gz", "").replace(".nii", "").endswith(stem):
-                if not row.get("acq_time"):
-                    row["acq_time"] = scan_date
-                break
-        write_scans_tsv(scans_path, rows, vcs=vcs)
 
-    return Change(
-        action="modify",
-        source=jf,
-        detail=f"Moved ScanDate ({scan_date}) to _scans.tsv acq_time",
+    stem = jf.stem  # e.g., sub-01_bold
+    matched = False
+    for row in rows:
+        fn = row.get("filename", "")
+        if fn.replace(".nii.gz", "").replace(".nii", "").endswith(stem):
+            if not row.get("acq_time"):
+                row["acq_time"] = scan_date
+            matched = True
+            break
+
+    if not matched:
+        filename_entry = _scans_tsv_filename_entry(jf, scans_path)
+        rows.append({"filename": filename_entry, "acq_time": scan_date})
+
+    # write_tsv is a no-op on empty rows, so ensure we always have content
+    # (we just appended above when the file was new).
+    write_scans_tsv(scans_path, rows, vcs=vcs)
+
+    detail = (
+        f"Moved ScanDate ({scan_date}) to {scans_path.name}:acq_time"
+        + (" (created)" if created_new else "")
     )
+    return Change(action="modify", source=jf, detail=detail)
 
 
 def _apply_doi_format(
@@ -1344,6 +1527,9 @@ def migrate_dataset(
         "field_removal": lambda r: _scan_for_field_removal(
             json_files, r, vcs=vcs, annexed_mode=amode
         ),
+        "field_nest": lambda r: _scan_for_field_nest(
+            json_files, r, vcs=vcs, annexed_mode=amode
+        ),
         "tsv_column_value": lambda r: _scan_for_age_column(
             dataset.root, r
         ),
@@ -1406,6 +1592,9 @@ def migrate_dataset(
         ),
         "suffix_deprecation": lambda f: _apply_suffix_deprecation(f, dataset),
         "field_removal": lambda f: _apply_field_removal(
+            f, vcs=vcs, annexed_mode=amode
+        ),
+        "field_nest": lambda f: _apply_field_nest(
             f, vcs=vcs, annexed_mode=amode
         ),
         "tsv_column_value": lambda f: _apply_age_column(

@@ -11,7 +11,7 @@ from bids_utils._scans import read_scans_tsv, write_scans_tsv
 from bids_utils._types import (
     Change,
     OperationResult,
-    is_bids_dir_file,
+    _is_bids_data_entry,
     normalize_subject_id,
     rename_change,
     require_subject_dir,
@@ -51,7 +51,7 @@ def rename_subject(
     # like .ds and .zarr which are BIDS data "files" stored as directories)
     files_to_rename: list[Path] = []
     for f in sorted(old_dir.rglob("*")):
-        if (is_bids_dir_file(f) or not f.is_dir()) and old_id in f.name:
+        if _is_bids_data_entry(f) and old_id in f.name:
             files_to_rename.append(f)
 
     # Record directory rename
@@ -102,7 +102,7 @@ def rename_subject(
     # before parents so files inside .ds/.zarr dirs are renamed before
     # the directory itself is moved)
     for f in sorted(new_dir.rglob("*"), reverse=True):
-        if (is_bids_dir_file(f) or not f.is_dir()) and old_id in f.name:
+        if _is_bids_data_entry(f) and old_id in f.name:
             new_name = f.name.replace(old_id, new_id)
             new_path = f.parent / new_name
             if f != new_path:
