@@ -52,27 +52,29 @@ class TestEnsureContent:
         vcs.get_content.assert_called_once_with([f])
 
     @pytest.mark.ai_generated
-    def test_skip_warning_raises_with_warning(
-        self, tmp_path: Path
+    @pytest.mark.parametrize(
+        ("mode", "expected_warnings"),
+        [
+            (AnnexedMode.SKIP_WARNING, 1),
+            (AnnexedMode.SKIP, 0),
+        ],
+        ids=["skip_warning_emits_warning", "skip_mode_is_silent"],
+    )
+    def test_skip_modes_raise(
+        self,
+        tmp_path: Path,
+        mode: AnnexedMode,
+        expected_warnings: int,
     ) -> None:
         vcs = _mock_vcs(has_content=False)
         f = tmp_path / "test.json"
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             with pytest.raises(ContentNotAvailableError):
-                ensure_content(f, vcs, AnnexedMode.SKIP_WARNING)
-        assert len(w) == 1
-        assert "Skipping" in str(w[0].message)
-
-    @pytest.mark.ai_generated
-    def test_skip_mode_raises_silently(self, tmp_path: Path) -> None:
-        vcs = _mock_vcs(has_content=False)
-        f = tmp_path / "test.json"
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            with pytest.raises(ContentNotAvailableError):
-                ensure_content(f, vcs, AnnexedMode.SKIP)
-        assert len(w) == 0
+                ensure_content(f, vcs, mode)
+        assert len(w) == expected_warnings
+        if expected_warnings:
+            assert "Skipping" in str(w[0].message)
 
 
 class TestEnsureWritable:

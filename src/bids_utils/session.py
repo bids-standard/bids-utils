@@ -2,14 +2,40 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from bids_utils._dataset import BIDSDataset
 from bids_utils._io import update_json_references
 from bids_utils._scans import read_scans_tsv, write_scans_tsv
 from bids_utils._types import (
+    AnnexedMode,
     Change,
     OperationResult,
     _is_bids_data_entry,
 )
+from bids_utils._vcs import VCSBackend
+
+
+def _rewrite_scans_labels(
+    scans_file: Path,
+    old_label: str,
+    new_label: str,
+    vcs: VCSBackend,
+    amode: AnnexedMode,
+) -> None:
+    """Read a scans.tsv and rewrite any ``filename`` entry containing *old_label*.
+
+    If no row needs to change, the file is left untouched.
+    """
+    rows = read_scans_tsv(scans_file, vcs=vcs, annexed_mode=amode)
+    modified = False
+    for row in rows:
+        fn = row.get("filename", "")
+        if old_label in fn:
+            row["filename"] = fn.replace(old_label, new_label)
+            modified = True
+    if modified:
+        write_scans_tsv(scans_file, rows, vcs=vcs)
 
 
 def rename_session(
@@ -128,17 +154,9 @@ def rename_session(
 
             # Update scans.tsv (within session dir and at subject level)
             for scans_file in new_ses_dir.rglob("*_scans.tsv"):
-                rows = read_scans_tsv(
-                    scans_file, vcs=vcs, annexed_mode=amode
+                _rewrite_scans_labels(
+                    scans_file, old_label, new_label, vcs, amode
                 )
-                modified = False
-                for row in rows:
-                    fn = row.get("filename", "")
-                    if old_label in fn:
-                        row["filename"] = fn.replace(old_label, new_label)
-                        modified = True
-                if modified:
-                    write_scans_tsv(scans_file, rows, vcs=vcs)
 
             # Also update subject-level scans.tsv which may reference
             # files by session-relative paths (e.g., ses-1/eeg/...)
@@ -147,17 +165,9 @@ def rename_session(
                     continue
                 if not (scans_file.is_file() or scans_file.is_symlink()):
                     continue
-                rows = read_scans_tsv(
-                    scans_file, vcs=vcs, annexed_mode=amode
+                _rewrite_scans_labels(
+                    scans_file, old_label, new_label, vcs, amode
                 )
-                modified = False
-                for row in rows:
-                    fn = row.get("filename", "")
-                    if old_label in fn:
-                        row["filename"] = fn.replace(old_label, new_label)
-                        modified = True
-                if modified:
-                    write_scans_tsv(scans_file, rows, vcs=vcs)
 
         else:
             # Move into session: no existing session, introduce new one

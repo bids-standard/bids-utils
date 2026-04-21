@@ -7,7 +7,6 @@ Run with: pytest tests/integration/ -m integration
 from __future__ import annotations
 
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -23,6 +22,7 @@ from bids_utils.session import rename_session
 from bids_utils.subject import remove_subject, rename_subject
 from tests.conftest import (
     BIDS_EXAMPLES_DIR,
+    _git,
     requires_bids_examples,
     requires_bids_validator,
     requires_git_annex,
@@ -79,6 +79,21 @@ def _iter_datasets() -> list[Path]:
     return datasets
 
 
+def _load_example_dataset(ds_name: str) -> tuple[Path, BIDSDataset]:
+    """Resolve a bids-examples dataset or skip the test on load failure.
+
+    Returns ``(ds_path, BIDSDataset)``.  The small wrapper keeps the
+    identical ``try/except FileNotFoundError, ValueError → pytest.skip``
+    boilerplate out of every sweep test.
+    """
+    ds_path = BIDS_EXAMPLES_DIR / ds_name
+    try:
+        ds = BIDSDataset.from_path(ds_path)
+    except (FileNotFoundError, ValueError) as exc:
+        pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+    return ds_path, ds
+
+
 def _dataset_ids() -> list[str]:
     return [d.name for d in _iter_datasets()]
 
@@ -128,11 +143,7 @@ class TestRenameSweep:
     @pytest.mark.ai_generated
     @pytest.mark.parametrize("ds_name", _dataset_ids())
     def test_rename_dry_run(self, ds_name: str) -> None:
-        ds_path = BIDS_EXAMPLES_DIR / ds_name
-        try:
-            ds = BIDSDataset.from_path(ds_path)
-        except (FileNotFoundError, ValueError) as exc:
-            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+        ds_path, ds = _load_example_dataset(ds_name)
 
         target = _find_renameable_file(ds_path)
         if target is None:
@@ -158,11 +169,7 @@ class TestSubjectRenameSweep:
     @pytest.mark.ai_generated
     @pytest.mark.parametrize("ds_name", _dataset_ids())
     def test_subject_rename_dry_run(self, ds_name: str) -> None:
-        ds_path = BIDS_EXAMPLES_DIR / ds_name
-        try:
-            ds = BIDSDataset.from_path(ds_path)
-        except (FileNotFoundError, ValueError) as exc:
-            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+        ds_path, ds = _load_example_dataset(ds_name)
 
         sub_dirs = sorted(
             d for d in ds_path.iterdir()
@@ -188,11 +195,7 @@ class TestMigrateSweep:
     @pytest.mark.ai_generated
     @pytest.mark.parametrize("ds_name", _dataset_ids())
     def test_migrate_dry_run(self, ds_name: str) -> None:
-        ds_path = BIDS_EXAMPLES_DIR / ds_name
-        try:
-            ds = BIDSDataset.from_path(ds_path)
-        except (FileNotFoundError, ValueError) as exc:
-            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+        ds_path, ds = _load_example_dataset(ds_name)
 
         result = migrate_dataset(ds, dry_run=True)
 
@@ -209,11 +212,7 @@ class TestMigrate20Sweep:
     @pytest.mark.ai_generated
     @pytest.mark.parametrize("ds_name", _dataset_ids())
     def test_migrate_to_20_dry_run(self, ds_name: str) -> None:
-        ds_path = BIDS_EXAMPLES_DIR / ds_name
-        try:
-            ds = BIDSDataset.from_path(ds_path)
-        except (FileNotFoundError, ValueError) as exc:
-            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+        ds_path, ds = _load_example_dataset(ds_name)
 
         result = migrate_dataset(ds, to_version="2.0.0", dry_run=True)
 
@@ -309,11 +308,7 @@ class TestSessionRenameSweep:
     @pytest.mark.ai_generated
     @pytest.mark.parametrize("ds_name", _find_session_dataset_ids())
     def test_session_rename_dry_run(self, ds_name: str) -> None:
-        ds_path = BIDS_EXAMPLES_DIR / ds_name
-        try:
-            ds = BIDSDataset.from_path(ds_path)
-        except (FileNotFoundError, ValueError) as exc:
-            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+        ds_path, ds = _load_example_dataset(ds_name)
 
         # Find first session in first subject
         sub_dirs = sorted(
@@ -345,11 +340,7 @@ class TestSessionRenameSweep:
     @pytest.mark.parametrize("ds_name", _find_sessionless_dataset_ids())
     def test_move_into_session_dry_run(self, ds_name: str) -> None:
         """Dry-run introducing a session to sessionless datasets."""
-        ds_path = BIDS_EXAMPLES_DIR / ds_name
-        try:
-            ds = BIDSDataset.from_path(ds_path)
-        except (FileNotFoundError, ValueError) as exc:
-            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+        ds_path, ds = _load_example_dataset(ds_name)
 
         result = rename_session(ds, "", "baseline", dry_run=True)
 
@@ -366,11 +357,7 @@ class TestMetadataSweep:
     @pytest.mark.ai_generated
     @pytest.mark.parametrize("ds_name", _dataset_ids())
     def test_aggregate_dry_run(self, ds_name: str) -> None:
-        ds_path = BIDS_EXAMPLES_DIR / ds_name
-        try:
-            ds = BIDSDataset.from_path(ds_path)
-        except (FileNotFoundError, ValueError) as exc:
-            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+        ds_path, ds = _load_example_dataset(ds_name)
 
         result = aggregate_metadata(ds, dry_run=True)
         assert result.dry_run
@@ -379,11 +366,7 @@ class TestMetadataSweep:
     @pytest.mark.ai_generated
     @pytest.mark.parametrize("ds_name", _dataset_ids())
     def test_segregate_dry_run(self, ds_name: str) -> None:
-        ds_path = BIDS_EXAMPLES_DIR / ds_name
-        try:
-            ds = BIDSDataset.from_path(ds_path)
-        except (FileNotFoundError, ValueError) as exc:
-            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+        ds_path, ds = _load_example_dataset(ds_name)
 
         result = segregate_metadata(ds, dry_run=True)
         assert result.dry_run
@@ -392,11 +375,7 @@ class TestMetadataSweep:
     @pytest.mark.ai_generated
     @pytest.mark.parametrize("ds_name", _dataset_ids())
     def test_audit_no_crash(self, ds_name: str) -> None:
-        ds_path = BIDS_EXAMPLES_DIR / ds_name
-        try:
-            ds = BIDSDataset.from_path(ds_path)
-        except (FileNotFoundError, ValueError) as exc:
-            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+        ds_path, ds = _load_example_dataset(ds_name)
 
         result = audit_metadata(ds)
         # Should never crash — just reports inconsistencies
@@ -428,11 +407,7 @@ class TestRemoveSweep:
     @pytest.mark.ai_generated
     @pytest.mark.parametrize("ds_name", _dataset_ids())
     def test_remove_subject_dry_run(self, ds_name: str) -> None:
-        ds_path = BIDS_EXAMPLES_DIR / ds_name
-        try:
-            ds = BIDSDataset.from_path(ds_path)
-        except (FileNotFoundError, ValueError) as exc:
-            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+        ds_path, ds = _load_example_dataset(ds_name)
 
         sub_dirs = sorted(
             d
@@ -452,11 +427,7 @@ class TestRemoveSweep:
     @pytest.mark.ai_generated
     @pytest.mark.parametrize("ds_name", _dataset_ids())
     def test_remove_run_dry_run(self, ds_name: str) -> None:
-        ds_path = BIDS_EXAMPLES_DIR / ds_name
-        try:
-            ds = BIDSDataset.from_path(ds_path)
-        except (FileNotFoundError, ValueError) as exc:
-            pytest.skip(reason=f"cannot load {ds_name}: {exc}")
+        ds_path, ds = _load_example_dataset(ds_name)
 
         hit = _find_run_file(ds_path)
         if hit is None:
@@ -653,22 +624,10 @@ class TestSessionRenameMutatingValidated:
         ds_copy = _copy_dataset(BIDS_EXAMPLES_DIR / ds_name, tmp_path)
         ds = BIDSDataset.from_path(ds_copy)
 
-        # Find first session in first subject
-        old_label: str | None = None
-        first_sub_dir: Path | None = None
-        for sub_dir in sorted(ds_copy.iterdir()):
-            if not sub_dir.is_dir() or not sub_dir.name.startswith("sub-"):
-                continue
-            for child in sorted(sub_dir.iterdir()):
-                if child.is_dir() and child.name.startswith("ses-"):
-                    old_label = child.name.removeprefix("ses-")
-                    first_sub_dir = sub_dir
-                    break
-            if old_label is not None:
-                break
-
-        if old_label is None:
+        found = _find_first_session(ds_copy)
+        if found is None:
             pytest.skip(reason=f"no ses-* directory in {ds_name}")
+        first_sub_dir, old_label = found
 
         pre_codes = _record_pre_errors(ds_copy)
 
@@ -677,7 +636,6 @@ class TestSessionRenameMutatingValidated:
             f"Session rename failed in {ds_name}: {result.errors}"
         )
 
-        assert first_sub_dir is not None
         assert not (first_sub_dir / f"ses-{old_label}").exists()
         assert (first_sub_dir / "ses-TESTZZ99").is_dir()
 
@@ -718,16 +676,6 @@ class TestMigrateMutatingValidated:
 # ---------------------------------------------------------------------------
 
 
-def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", *args],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-
-
 def _annexify_dataset(src: Path, tmp_path: Path) -> Path:
     """Copy a dataset, init git-annex, force ALL files into annex."""
     dst = tmp_path / src.name
@@ -744,6 +692,37 @@ def _annexify_dataset(src: Path, tmp_path: Path) -> Path:
     _git(dst, "commit", "-m", "init annexed")
 
     return dst
+
+
+def _load_annexified_dataset(
+    ds_name: str, tmp_path: Path
+) -> tuple[Path, BIDSDataset]:
+    """Copy + annexify a bids-examples dataset and return (path, BIDSDataset).
+
+    ``annexed_mode`` is set to ``SKIP`` so tests don't require actual
+    annex content to be fetched.
+    """
+    src = BIDS_EXAMPLES_DIR / ds_name
+    ds_path = _annexify_dataset(src, tmp_path)
+    ds = BIDSDataset.from_path(ds_path)
+    ds.annexed_mode = AnnexedMode.SKIP
+    return ds_path, ds
+
+
+def _find_first_session(
+    ds_root: Path,
+) -> tuple[Path, str] | None:
+    """Return ``(sub_dir, session_label)`` for the first ses-* found, else None.
+
+    *session_label* has the ``ses-`` prefix stripped.
+    """
+    for sub_dir in sorted(ds_root.iterdir()):
+        if not sub_dir.is_dir() or not sub_dir.name.startswith("sub-"):
+            continue
+        for child in sorted(sub_dir.iterdir()):
+            if child.is_dir() and child.name.startswith("ses-"):
+                return sub_dir, child.name.removeprefix("ses-")
+    return None
 
 
 def _annex_dataset_ids() -> list[str]:
@@ -776,10 +755,7 @@ class TestAnnexRenameSweep:
     def test_rename_dry_run_annex(
         self, ds_name: str, tmp_path: Path
     ) -> None:
-        src = BIDS_EXAMPLES_DIR / ds_name
-        ds_path = _annexify_dataset(src, tmp_path)
-        ds = BIDSDataset.from_path(ds_path)
-        ds.annexed_mode = AnnexedMode.SKIP
+        ds_path, ds = _load_annexified_dataset(ds_name, tmp_path)
 
         target = _find_renameable_file(ds_path)
         if target is None:
@@ -798,10 +774,7 @@ class TestAnnexRenameSweep:
         self, ds_name: str, tmp_path: Path
     ) -> None:
         """Actually rename a file in an annexed dataset."""
-        src = BIDS_EXAMPLES_DIR / ds_name
-        ds_path = _annexify_dataset(src, tmp_path)
-        ds = BIDSDataset.from_path(ds_path)
-        ds.annexed_mode = AnnexedMode.SKIP
+        ds_path, ds = _load_annexified_dataset(ds_name, tmp_path)
 
         target = _find_renameable_file(ds_path)
         if target is None:
@@ -828,10 +801,7 @@ class TestAnnexSubjectRenameSweep:
     def test_subject_rename_annex(
         self, ds_name: str, tmp_path: Path
     ) -> None:
-        src = BIDS_EXAMPLES_DIR / ds_name
-        ds_path = _annexify_dataset(src, tmp_path)
-        ds = BIDSDataset.from_path(ds_path)
-        ds.annexed_mode = AnnexedMode.SKIP
+        ds_path, ds = _load_annexified_dataset(ds_name, tmp_path)
 
         sub_dirs = sorted(
             d
@@ -877,32 +847,22 @@ class TestAnnexSessionRenameSweep:
     def test_session_rename_annex(
         self, ds_name: str, tmp_path: Path
     ) -> None:
-        src = BIDS_EXAMPLES_DIR / ds_name
-        ds_path = _annexify_dataset(src, tmp_path)
-        ds = BIDSDataset.from_path(ds_path)
-        ds.annexed_mode = AnnexedMode.SKIP
+        ds_path, ds = _load_annexified_dataset(ds_name, tmp_path)
 
-        # Find first session
-        for sub_dir in sorted(ds_path.iterdir()):
-            if not sub_dir.is_dir() or not sub_dir.name.startswith("sub-"):
+        found = _find_first_session(ds_path)
+        if found is None:
+            pytest.skip(f"no sessions in {ds_name}")
+        sub_dir, old_label = found
+
+        result = rename_session(ds, old_label, "TESTZZ99")
+        assert result.success, (
+            f"Annex session rename in {ds_name}: {result.errors}"
+        )
+        # Verify no files retain old session
+        new_ses = sub_dir / "ses-TESTZZ99"
+        for f in new_ses.rglob("*"):
+            if f.is_dir():
                 continue
-            for child in sorted(sub_dir.iterdir()):
-                if child.is_dir() and child.name.startswith("ses-"):
-                    old_label = child.name.removeprefix("ses-")
-                    result = rename_session(
-                        ds, old_label, "TESTZZ99"
-                    )
-                    assert result.success, (
-                        f"Annex session rename in {ds_name}: "
-                        f"{result.errors}"
-                    )
-                    # Verify no files retain old session
-                    new_ses = sub_dir / "ses-TESTZZ99"
-                    for f in new_ses.rglob("*"):
-                        if f.is_dir():
-                            continue
-                        assert f"ses-{old_label}" not in f.name, (
-                            f"File retains old session: {f.name}"
-                        )
-                    return
-        pytest.skip(f"no sessions in {ds_name}")
+            assert f"ses-{old_label}" not in f.name, (
+                f"File retains old session: {f.name}"
+            )

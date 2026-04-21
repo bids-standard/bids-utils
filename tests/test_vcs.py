@@ -8,6 +8,23 @@ import pytest
 from bids_utils._vcs import DataLad, Git, GitAnnex, NoVCS, detect_vcs
 
 
+def _init_git_repo(path: Path) -> None:
+    """Initialize a git repo with a default user for commits."""
+    subprocess.run(["git", "init"], cwd=path, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=path,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=path,
+        capture_output=True,
+        check=True,
+    )
+
+
 class TestNoVCS:
     @pytest.mark.ai_generated
     def test_move(self, tmp_path: Path) -> None:
@@ -59,19 +76,7 @@ class TestNoVCS:
 class TestGit:
     @pytest.mark.ai_generated
     def test_move(self, tmp_path: Path) -> None:
-        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
-        subprocess.run(
-            ["git", "config", "user.email", "test@test.com"],
-            cwd=tmp_path,
-            capture_output=True,
-            check=True,
-        )
-        subprocess.run(
-            ["git", "config", "user.name", "Test"],
-            cwd=tmp_path,
-            capture_output=True,
-            check=True,
-        )
+        _init_git_repo(tmp_path)
         src = tmp_path / "a.txt"
         src.write_text("hello")
         subprocess.run(
@@ -92,19 +97,7 @@ class TestGit:
 
     @pytest.mark.ai_generated
     def test_is_dirty(self, tmp_path: Path) -> None:
-        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
-        subprocess.run(
-            ["git", "config", "user.email", "test@test.com"],
-            cwd=tmp_path,
-            capture_output=True,
-            check=True,
-        )
-        subprocess.run(
-            ["git", "config", "user.name", "Test"],
-            cwd=tmp_path,
-            capture_output=True,
-            check=True,
-        )
+        _init_git_repo(tmp_path)
         (tmp_path / "a.txt").write_text("x")
         subprocess.run(
             ["git", "add", "."], cwd=tmp_path, capture_output=True, check=True
