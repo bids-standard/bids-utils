@@ -91,3 +91,7 @@ it is not time for it but README.md is too basic/too ugly.  Provide basic README
 ---
 
 hey -- rename CLAUDE.md to CONTRIBUTING.md, refer to it from README.md instead of repeating. create symlink back to CLAUDE.md. In README provide   bids-utils --help listing commands and show how to enable completions.
+
+---
+
+commit
