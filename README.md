@@ -127,3 +127,6 @@ Apache License 2.0.
 
 [bst]: https://github.com/bids-standard/bids-specification
 [bex]: https://github.com/bids-standard/bids-examples
+
+
+<!-- Bounty fix for #11 -->
