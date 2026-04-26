@@ -61,15 +61,22 @@ Abstract interface for version control operations.
 class VCSBackend(Protocol):
     name: str  # "none", "git", "git-annex", "datalad"
 
+    # Core filesystem operations
     def move(self, src: Path, dst: Path) -> None: ...
     def remove(self, path: Path) -> None: ...
     def is_dirty(self) -> bool: ...
     def commit(self, message: str, paths: list[Path]) -> None: ...
 
-class NoVCS: ...      # Direct filesystem operations
-class Git: ...        # git mv, git rm, git commit
-class GitAnnex: ...   # git annex commands + git operations
-class DataLad: ...    # datalad run semantics
+    # Annex content lifecycle (FR-022, FR-023)
+    def has_content(self, path: Path) -> bool: ...
+    def get_content(self, paths: list[Path]) -> None: ...
+    def unlock(self, paths: list[Path]) -> None: ...
+    def add(self, paths: list[Path]) -> None: ...
+
+class NoVCS: ...      # Direct filesystem; has_content=True, unlock/add no-op
+class Git: ...        # git mv/rm/commit; has_content=True, unlock no-op, add=`git add`
+class GitAnnex: ...   # git annex get/unlock/add; checks symlink target for has_content
+class DataLad: ...    # datalad get/unlock; add via `git annex add`
 ```
 
 **Detection order**: DataLad → GitAnnex → Git → NoVCS (most specific first).
