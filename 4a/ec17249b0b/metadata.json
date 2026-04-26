@@ -1,0 +1,29 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "4aec17249b0b",
+  "strategy": "manual-commit",
+  "branch": "001-consistent-inout",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".specify/specs/001-consistent-inout/contracts/io_contract.md",
+    ".specify/specs/001-consistent-inout/data-model.md",
+    ".specify/specs/001-consistent-inout/plan.md",
+    ".specify/specs/001-consistent-inout/quickstart.md",
+    ".specify/specs/001-consistent-inout/research.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/4a/ec17249b0b/0/metadata.json",
+      "transcript": "/4a/ec17249b0b/0/full.jsonl",
+      "content_hash": "/4a/ec17249b0b/0/content_hash.txt",
+      "prompt": "/4a/ec17249b0b/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 39,
+    "cache_creation_tokens": 148304,
+    "cache_read_tokens": 1758148,
+    "output_tokens": 27034,
+    "api_call_count": 29
+  }
+}
