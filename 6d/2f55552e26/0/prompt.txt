@@ -1,0 +1,9 @@
+/speckit.analyze
+
+---
+
+yes
+
+---
+
+apply
