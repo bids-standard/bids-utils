@@ -1,0 +1,13 @@
+/speckit.specify Formatting preserving input/output of json (and potentially other) file formats
+
+---
+
+keep them all in a singular location , so under .specify/specs/
+
+---
+
+keep them all in a singular location , so under .specify/specs/
+
+---
+
+yes

@@ -1,0 +1,26 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "a95d1626224e",
+  "strategy": "manual-commit",
+  "branch": "001-consistent-inout",
+  "checkpoints_count": 3,
+  "files_touched": [
+    ".specify/scripts/bash/common.sh",
+    ".specify/scripts/bash/create-new-feature.sh"
+  ],
+  "sessions": [
+    {
+      "metadata": "/a9/5d1626224e/0/metadata.json",
+      "transcript": "/a9/5d1626224e/0/full.jsonl",
+      "content_hash": "/a9/5d1626224e/0/content_hash.txt",
+      "prompt": "/a9/5d1626224e/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 59,
+    "cache_creation_tokens": 177201,
+    "cache_read_tokens": 3050296,
+    "output_tokens": 35458,
+    "api_call_count": 40
+  }
+}
