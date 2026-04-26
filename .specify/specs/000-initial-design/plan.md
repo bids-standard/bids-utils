@@ -219,7 +219,7 @@ tests/
 2. **Implement CLI filtering** (FR-030):
    - `--level=safe` (default), `--level=advisory`, `--level=all`
    - `--rule-id=ID` / `--exclude-rule=ID` for per-rule control
-   - `--mode=auto` (default: interactive when PTY, non-interactive otherwise), `--mode=non-interactive`, `--mode=interactive`
+   - `--mode=auto` (default: currently non-interactive; PTY-aware interactive prompting deferred to T103/post-MVP), `--mode=non-interactive`, `--mode=interactive` (planned)
    - Library API: `level`, `mode`, `rule_ids`, `exclude_rules` parameters on `migrate_dataset()`
 3. Implement migration rule engine in `migrate.py`:
    - Scan deprecation markers from ALL schema levels (not just `rules/checks`):
