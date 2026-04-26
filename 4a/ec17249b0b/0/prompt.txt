@@ -1,1 +1,5 @@
 /speckit.plan
+
+---
+
+why CLAUDE.md symlink was replaced?  I am fixing that -- must be a symlink to DEVELOPMENT.md - if need to change -- modify that one.   I see "`python-json-source-map` / `jsonpreserve` / `cson`-style libraries" and that rejected as overkill. Overall -- if there is an actively maintained library without heavy dependencies which could assist here , e.g. in case of json in particular, I would prefer to go with it.  Please provide detailed research and consideration here across those or any other library which could be of assistance.
