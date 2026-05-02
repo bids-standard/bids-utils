@@ -55,3 +55,11 @@ since we also have --set-suffix (not just entities) , I think it should be not e
 ---
 
 commit outstanding changes and propose next steps
+
+---
+
+/speckit-analyze
+
+---
+
+yes
