@@ -1,0 +1,57 @@
+/speckit.clarify  'bids-utils rename', remove and so on must be able to rename files which are not named according to BIDS ATM. In particular such files as produced by heudiconv having detected duplicate runs like './sub-qa64/ses-20220217/func/sub-qa64_ses-20220217_task-rest_acq-p2_bold__dup-01.nii.gz' .  So it is important to check that our operations robust to such input files. Additionally, 'rename' then should have option to 'normalize' the filepath by default if target path is not fully bids compliant as in the order of entities . Warning should be issued. People should be able to disable that mode as well.  Here is original issue on this, implementation should close it https://github.com/bids-standard/bids-utils/issues/14
+
+---
+
+I feel that we need to review our overall design plan -- do we have 'normalize' or
+
+---
+
+I feel that we need to review our overall design plan -- do we have 'normalize' or alike command? you bring up useful ideas I had in mind too, and we encountered in the nwb2bids project on sanitization of things, like entity labels (e.g. replacing - with + in the values), and this lower casing for entity names, etc.  So I feel we need to design a separate command for that with dedicated options. So, hence for 'normalize' just add a high level TODO to workout such command and then interface appropriately e.g. to rename and potentially other commands. Here let's concentrate then just on ensuring that we can rename non-bids into bids.  please add TODO, and reevaluable this clarification target questions.  I would like to aim for us for ensuring extended testing for such commands operation on available examples etc
+
+---
+
+A
+
+---
+
+going back to question. "Explicit better than implicit" -- I think for the 'rename --set' better to get a separate command 'edit-entities' which would have those semantics on which one to set, delete, etc.  For 'rename' -- keep that clean 'rename SRC DST' semantic, with super-power to understand that if 'DST' is a folder, it would support some renames, like moving into another subject or session, which would then need to also invoke that 'edit-entities' on it appropriately.
+
+---
+
+D
+
+---
+
+D
+
+---
+
+B but no need to 'copy' -- create a throw away worktree -- I guess it should be a generic pattern for all tests based on bids-examples: from a local clone create a test specific throw away worktree in a temp dir, work, remove that worktree.  Indeed -- ingect into some random files __dup-NN extra suffixes like heudiconv does, and potentially other +mine , --crap and alike for such a test.
+
+---
+
+A
+
+---
+
+/speckit-plan
+
+---
+
+/speckit-tasks
+
+---
+
+you said "Pending dependent docs (not modified by /speckit.tasks, per project rule) " -- what rules and why not to modify?  also on the tasks -- we already have 'rename --set' -- I thought that it would mostly be renaming it to "edit-entities" -- not sure that is clear from the tasks.
+
+---
+
+the intention for ~/.claude/CLAUDE.md rules were to just stop progress from e.g. constitution step to automatically jump into doing some specification and implementation.  How to make it clearer in that file instructions?  I do want spec-kit to progress forward where it is known what next to be done .  And do cascade into modifying those files -- Ithink it is appropriate here!
+
+---
+
+since we also have --set-suffix (not just entities) , I think it should be not edit-entities but edit-filename or alike. Adjust for that through the changes.    I also did some tuneups to ./.specify/specs/000-initial-design/quickstart.md -- please review. The idea is that we could apply conveniently to globs and potentially across subjects/sessions!   that might need reflections also back int spec
+
+---
+
+commit outstanding changes and propose next steps
