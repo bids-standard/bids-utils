@@ -25,19 +25,90 @@ class BIDSDataset:
         """Schema for this dataset's BIDS version."""
 ```
 
-### `bids_utils.rename`
+### `bids_utils.rename` (mv-like — FR-039, FR-043)
 
 ```python
 def rename_file(
     dataset: BIDSDataset,
-    path: str | Path,
+    src: PathArg,                # single path OR sequence (multi-source mv)
+    dst: str | Path,
     *,
-    set_entities: dict[str, str] | None = None,
-    new_suffix: str | None = None,
     dry_run: bool = False,
     include_sourcedata: bool = False,
 ) -> OperationResult:
-    """Rename a BIDS file and all its sidecars."""
+    """Rename one or more BIDS files (and their sidecars) into `dst`.
+
+    Pure mv-like semantics — does NOT mutate entity values via parameters
+    (use `edit_filename()` for that). Sidecars are discovered by FR-038
+    full-literal-stem matching, so non-BIDS source filenames such as
+    heudiconv duplicate-run output (`..._bold__dup-01.nii.gz`) are
+    handled correctly.
+
+    `src` accepts a single path or a sequence of paths. When multiple
+    paths are passed, `dst` MUST be an existing directory (mirrors Unix
+    `mv`). The whole batch is atomic — any conflict aborts before
+    filesystem mutation (FR-043).
+
+    Cross-container detection: when `dst` lives under a different
+    `sub-XX/[ses-YY]/` than the source(s) (or `dst` is a directory),
+    the destination filename's `sub-` / `ses-` entity labels are
+    rewritten to match the destination path, delegating to
+    `edit_filename`'s `_rewrite_entities_for_target_filename(...)` core.
+    Result satisfies entity-order normalization (FR-035).
+
+    Conflicts (any target file already exists) raise exit code 2 (FR-011).
+    """
+```
+
+### `bids_utils.edit_filename` (FR-040)
+
+```python
+PathLike = str | Path
+PathArg = PathLike | Sequence[PathLike]
+
+def edit_filename(
+    dataset: BIDSDataset,
+    paths: PathArg,
+    *,
+    set_entities: dict[str, str] | None = None,
+    delete_entities: list[str] | None = None,
+    set_suffix: str | None = None,
+    dry_run: bool = False,
+    include_sourcedata: bool = False,
+) -> OperationResult:
+    """In-place edits to one or many BIDS filenames (and their sidecars).
+
+    Canonical home for the `--set` / `--delete` / `--set-suffix` semantics
+    formerly attached to `rename`. Edits the filename in place — both the
+    entity portion and the suffix — without moving the file to a different
+    directory. (Use `rename_file()` for cross-directory / cross-container
+    moves.)
+
+    Batch / glob input (FR-043):
+    - `paths` accepts either a single path or a sequence of paths.
+    - The CLI passes through shell-globbed lists, so
+      `bids-utils edit-filename sub-*/func/sub-*_task-rest_bold.nii.gz
+      --set task=nback` operates across many files (and across multiple
+      subjects/sessions) in a single invocation. The same edit is applied
+      to each path; if any path conflicts (target already exists, schema
+      validation fails, etc.) the whole batch is refused with exit code 2
+      before any filesystem mutation (atomic batch — FR-043).
+    - Sidecars are discovered per source path via FR-038 full-literal-stem
+      matching, so heudiconv-style non-BIDS filenames are handled.
+    - `_scans.tsv` updates are coalesced per (subject, session) container
+      so a single batch produces one update per scans file.
+
+    - `set_entities`: insert/overwrite entity values (applied to every path).
+    - `delete_entities`: remove the listed entity keys (applied to every path).
+    - `set_suffix`: replace the BIDS suffix (applied to every path).
+
+    Output filenames satisfy entity-order normalization (FR-035).
+    Robust to non-BIDS source filenames: unrecognized trailing segments
+    (e.g. heudiconv `__dup-NN`) are preserved verbatim — explicit
+    canonicalization is deferred to a future `normalize` command (FR-037).
+
+    Conflicts (any target file already exists) raise exit code 2 (FR-011).
+    """
 ```
 
 ### `bids_utils.subject`
@@ -238,6 +309,10 @@ Per-command common options:
 - `--force`: Skip confirmation on destructive operations
 - `--include-sourcedata`: Extend operation to `sourcedata/` and `.heudiconv/`
 - `--schema-version VERSION`: Override detected schema version
+
+Rename / edit-filename split (FR-039, FR-040, FR-043):
+- `bids-utils rename SRC [SRC ...] DST` — mv-like. Accepts either `SRC DST` (single source) or `SRC ... DST` where DST is a directory (multi-source, mirroring Unix `mv`). Does NOT accept `--set` / `--delete` / `--suffix` (these were the pre-2026-04-27 flags); passing them yields a non-zero exit and a hint pointing to `edit-filename`. Detects cross-container moves and rewrites `sub-` / `ses-` labels in the destination filename automatically.
+- `bids-utils edit-filename SRC [SRC ...] --set KEY=VALUE [--set ...] [--delete KEY ...] [--set-suffix SUFFIX]` — in-place edits to the filename (entities and/or suffix) for one or many BIDS files. `SRC` accepts shell globs and may span subjects/sessions in a single invocation; the same edit is applied to each source. `--set` / `--delete` are repeatable. The whole batch is atomic — any conflict aborts before filesystem mutation (FR-043). Operates within each `SRC`'s directory only — for cross-directory moves, use `rename`.
 
 Migrate-specific options:
 - `--to VERSION`: Target BIDS version (default: current released 1.x)

@@ -415,6 +415,66 @@
 
 ---
 
+## Phase 1d: Integration Test Fixture Pattern (FR-042)
+
+**Purpose**: Establish a generic, reusable per-test fixture pattern based on `git worktree` over the local `bids-examples` clone, plus an injection helper for adversarial non-BIDS source filenames. This unblocks Phase 2a/2b non-BIDS coverage and Phase 5b sweep.
+
+**Independent Test**: A throwaway worktree fixture creates and tears down a per-test copy of a `bids-examples` dataset without mutating the host clone. The injection helper produces files like `..._bold__dup-01.nii.gz` whose presence is independently verifiable by the BIDS validator.
+
+- [ ] T126 [P] Implement per-test git-worktree fixture in `tests/integration/_worktree_fixture.py`: pytest fixture `bids_examples_worktree(dataset_id)` that runs `git worktree add --detach <unique_path> <ref>` from the local `bids-examples` clone into a unique path under `tmp_path`, yields the worktree path, and on teardown calls `git worktree remove --force <unique_path>`. MUST NOT call `git worktree prune` (per CLAUDE.md global rule). Add variant `bids_examples_worktree_annexed(dataset_id)` that additionally enables `git annex init` + force-annex of all data files for SC-008 coverage.
+- [ ] T127 [P] Implement non-BIDS suffix injection helper in `tests/integration/_nonbids_inject.py`: `inject_nonbids_suffixes(worktree_root, *, kinds=("dup",), seed=0, count=2) -> list[Path]` that deterministically (seeded RNG) selects `count` data files per `kind` and creates additional files with full-literal stems including the chosen non-BIDS suffix (`__dup-01` for "dup", `+mine` for "plus_mine", `--crap` for "crap", `_test` for "test") plus their full-literal-stem sidecars. Must copy bytes (or symlinks for git-annex) so injected files are real artefacts.
+- [ ] T128 [P] Implement validator wrapper helpers in `tests/integration/_validator.py`: `assert_validator_flags(worktree_root, *, expected_files: list[Path])` (asserts injected files appear in validator output), `assert_validator_passes(worktree_root, *, ignore_pre_existing: list[str] | None = None)` (asserts validator passes modulo pre-existing warnings). Both helpers skip gracefully via `pytest.skip` when `bids-validator-deno` is absent.
+- [ ] T129 Write fixture self-tests in `tests/integration/test_worktree_fixture.py`: verify worktree creation/teardown leaves the host `bids-examples` clone untouched, two parallel test cases get isolated worktrees, the annexed variant produces locked symlinks, and the injection helper produces files that survive a validator round-trip.
+- [ ] T130 [P] Add a brief `tests/integration/README.md` documenting the worktree fixture pattern and the injection helper kinds, including the rule against `git worktree prune` and the deterministic seed contract.
+
+**Checkpoint**: `pytest tests/integration/test_worktree_fixture.py` passes; new tests can `bids_examples_worktree("ds000001")` and get a clean throwaway worktree.
+
+---
+
+## Phase 2a/2b: Split Existing `rename --set` into `edit-filename` + mv-like `rename` (FR-038, FR-039, FR-040)
+
+**Framing**: This phase is a **move/rename, not a rewrite**. The existing `src/bids_utils/rename.py` (T025, ~199 lines) and `src/bids_utils/cli/rename.py` (T027, ~74 lines) already implement the full entity-mutation logic via `set_entities`/`new_suffix`/`--set`/`--suffix`. We treat that working code as the seed for the new `edit-filename` command, then trim what's left of `rename.py` down to a much smaller mv-like core. Phase 2a (the trimmed `rename`) and Phase 2b (the relocated `edit-filename`) are co-required and easiest to land in a single PR — listed as separate phases only for traceability against FR-039 vs FR-040.
+
+**Independent Test**:
+- `bids-utils edit-filename sub-01/func/sub-01_task-rest_bold.nii.gz --set task=nback` performs exactly what `rename --set task=nback` did before — same files moved, same `_scans.tsv` row update, same validator outcome (regression-equivalent).
+- `bids-utils rename sub-01/func/sub-01_task-rest_bold.nii.gz sub-02/ses-post/func/` (cross-container) moves the file and rewrites `sub-`/`ses-` labels; dataset still validates. The new `rename` rejects `--set`/`--delete` flags with a hint pointing to `edit-filename`.
+
+### Phase 2b: Move existing entity-mutation logic into `edit-filename` (FR-040)
+
+- [ ] T135 [US1] **Move (not rewrite)** the existing `rename_file()` body from `src/bids_utils/rename.py` into a new `src/bids_utils/edit_filename.py` as `edit_filename(dataset, path, *, set_entities=None, delete_entities=None, dry_run=False, include_sourcedata=False) -> OperationResult`. Concrete steps: (i) `git mv src/bids_utils/rename.py src/bids_utils/edit_filename.py` then re-add a fresh stub `rename.py` for T131; (ii) rename the function to `edit_filename`; (iii) replace `set_entities` semantics as-is; (iv) add a `delete_entities: list[str] | None` parameter that calls a new `BIDSPath.without_entities(*keys)` helper (or inlines a `dict.pop` loop); (v) keep `with_suffix` support but rename the kwarg from `new_suffix` to `set_suffix` for naming symmetry; (vi) preserve the existing `_scans.tsv` update, conflict detection, and `_vcs.move` calls verbatim. The body of the function should be **substantively unchanged** from the old `rename_file()`.
+- [ ] T136 [P] [US1] **Move (not rewrite)** the existing `cli/rename.py` into `src/bids_utils/cli/edit_filename.py`: `git mv src/bids_utils/cli/rename.py src/bids_utils/cli/edit_filename.py`, rename the click command from `rename` to `edit-filename`, keep `--set` (multiple, parsed by existing `_parse_set_option`), rename `--suffix` → `--set-suffix` for symmetry with `--set`, and add a new repeatable `--delete KEY` option that populates a `delete_entities` list. Re-add a fresh stub `cli/rename.py` for T133. The body of the click command should be **substantively unchanged**, just routing to `edit_filename()` instead of `rename_file()`.
+- [ ] T137 [US1] Re-register both commands in the click CLI group in `src/bids_utils/cli/__init__.py`: keep `rename` (now backed by T133's stub) and add `edit-filename` (backed by T136). Update `bids-utils --help` so the two appear with distinct one-line descriptions making the split obvious.
+- [ ] T138 [US1] **Rename (not rewrite) tests**: `git mv tests/test_rename.py tests/test_edit_filename.py` and update imports from `bids_utils.rename` to `bids_utils.edit_filename` and CLI invocations from `bids-utils rename --set ...` to `bids-utils edit-filename --set ...`. The test bodies should be substantively unchanged — they were already testing the entity-mutation behaviour. Add only the new tests required by the change: FR-035 entity-order regression (run before recording), FR-038 non-BIDS preservation (`__dup-NN` segment retained verbatim), and the new `--delete KEY` cases. A fresh `tests/test_rename.py` will be created in T134 for the trimmed mv-like API.
+
+### Phase 2a: Trim `rename` down to mv-like SRC→DST (FR-039)
+
+- [ ] T131 [US1] **Trim, don't rewrite**. After T135 has moved the entity-mutation logic out, populate the new (post-`git mv`) `src/bids_utils/rename.py` with a small `rename_file(dataset, src_path, dst_path, *, dry_run=False, include_sourcedata=False) -> OperationResult` that performs only the mv-like core: discover sidecars for `src_path` via FR-038 full-literal-stem matching (T139), check conflicts on `dst_path`, call `_vcs.move(src, dst)` for each (primary + sidecars), update `_scans.tsv` rows referencing the old filename, invoke the FR-025 BIDS URI fixup helper. Drop the `set_entities`/`new_suffix` parameters entirely (their behaviour now lives in `edit_filename`). Mark the breaking pre-1.0 API change in the docstring.
+- [ ] T132 [US1] Add cross-container detection to the trimmed `rename_file()` in `src/bids_utils/rename.py`: extract `(sub, ses)` containers from `src_path` and `dst_path`. When they differ (or `dst_path` is a directory under a different container), import `_rewrite_entities_for_target_filename(...)` from `edit_filename` (T135) and use it to rewrite the destination filename's `sub-`/`ses-` labels to match the destination path. Result MUST satisfy entity-order normalization (FR-035). Add unit tests covering the four combinations: (same sub, same ses), (different sub), (different ses), (different sub+ses).
+- [ ] T133 [US1] Populate the new (post-`git mv`) `src/bids_utils/cli/rename.py` as a small click command taking positional `SRC` and `DST` only. Reject `--set`/`--delete`/`--suffix` with a clear error message pointing the user to `bids-utils edit-filename` (these were the old flags — users will reflexively try them). Preserve `--dry-run`, `--json`, `-v`/`-q`, `--include-sourcedata`. Smoke-test in `tests/test_cli.py`: `bids-utils rename --help` lists no `--set`/`--delete`; passing them yields a non-zero exit and a hint.
+- [ ] T134 [US1] Create a fresh `tests/test_rename.py` (the old file was moved to `test_edit_filename.py` in T138) covering only the trimmed mv-like behaviour: (a) bare same-directory rename (using FR-042 `bids_examples_worktree`), (b) cross-container rename moves a file into a new `sub-XX/ses-YY/` and rewrites the entity labels, (c) heudiconv-style `..._bold__dup-01.nii.gz` → clean BIDS target via `rename SRC DST` with sidecars matched by full literal stem, (d) conflict detection (existing target → exit 2), (e) VCS path (`git mv`).
+- [ ] T139 [US1] Update `src/bids_utils/_sidecars.py` `find_sidecars()` to honor FR-038: when the source filename is non-BIDS (does not parse as a valid `BIDSPath`), use the **full literal stem** (basename minus final extension; preserving `__dup-NN`, `+mine`, etc.) for sibling matching — do NOT canonicalize or strip non-BIDS trailing segments. When the source IS valid BIDS, retain the existing schema-driven sidecar-extension lookup. Add tests in `tests/test_sidecars.py` covering both branches and a mixed directory.
+- [ ] T144 [US1] Implement batch / glob input for both commands (FR-043). (a) In `src/bids_utils/edit_filename.py`, change the function signature from `path: str | Path` to `paths: PathArg` (single path or sequence) and apply set/delete/set-suffix to each path, coalescing `_scans.tsv` updates per `(subject, session)` container. Pre-compute every target path and refuse the entire batch with exit code 2 if ANY conflict (target exists, schema validation fails, etc.) is detected — atomic-at-batch-level. (b) In `src/bids_utils/cli/edit_filename.py`, change the `SRC` click argument to `nargs=-1` and accept multiple positional paths so shell globs (`sub-*/func/...`) flow through naturally. (c) In `src/bids_utils/rename.py`, accept multi-source input where the final argument is the destination directory (mirrors Unix `mv`); single-source `rename SRC DST` keeps current semantics. Update `cli/rename.py` similarly. (d) Add unit tests in `tests/test_edit_filename.py` and `tests/test_rename.py` covering: single path (regression), multi-path same-directory, glob across subjects, partial-failure (one conflict aborts the whole batch with no filesystem mutation), and `_scans.tsv` coalescing. (e) Add an integration test using FR-042's worktree fixture: glob across two subjects, apply `--set task=nback`, verify the dataset still validates.
+- [ ] T145 [US1] Add atomic-batch tests in `tests/test_edit_filename.py` and `tests/test_rename.py` (SC-010): set up a worktree with two source files where the second's target collides with an existing file; assert the command exits with code 2, stderr names the conflicting file, and the first source is **not** renamed (filesystem unchanged). Repeat for the same scenario in `--dry-run` mode (no mutation either way, but the conflict is still reported).
+
+**Checkpoint**: `bids-utils rename SRC DST` works for same-directory, cross-directory-same-container, and cross-container moves. Heudiconv `__dup-NN` source files are renamed cleanly. The CLI no longer accepts `--set`/`--delete`. `bids-utils edit-filename --set task=nback FILE` is regression-equivalent to the old `bids-utils rename FILE --set task=nback`.
+
+---
+
+## Phase 5b: Non-BIDS Source Robustness Sweep (FR-041, SC-009)
+
+**Purpose**: Confirm and (where needed) repair that the five file-touching commands (`rename`, `edit-filename`, `remove`, `subject-rename`, `session-rename`) operate correctly on non-BIDS-named source files (`__dup-NN`, `+mine`, `--crap`, `_test`). `migrate` is explicitly out of scope per Session 2026-04-27 Q3.
+
+**Independent Test**: For each of the five commands, an integration test (a) injects adversarial-suffix files into a `bids-examples` worktree, (b) asserts the validator flags those files (pre-state contract), (c) runs the command, and (d) asserts the validator passes (modulo pre-existing warnings) — proving the injected files were renamed/removed cleanly, not silently skipped.
+
+- [ ] T140 [P] Audit each command for FR-041 compliance and patch as needed: walk through `src/bids_utils/rename.py`, `src/bids_utils/edit_filename.py`, `src/bids_utils/subject.py`, `src/bids_utils/session.py`, `src/bids_utils/run.py` and verify (a) sidecar discovery uses FR-038 full-literal-stem matching, (b) file iteration uses `_is_bids_data_entry()` (FR-023, FR-036), (c) `_scans.tsv` row updates match filenames literally, (d) non-BIDS trailing segments are preserved verbatim. File any deltas as follow-up tasks if real bugs are found.
+- [ ] T141 [US1,US4,US5,US7] Write `tests/integration/test_nonbids_sources.py` parameterised over `command in {rename, edit-filename, remove, subject-rename, session-rename}` × `kind in {"dup", "plus_mine", "crap", "test"}`. For each combination: materialise a `bids_examples_worktree`, capture pre-existing validator warnings, call `inject_nonbids_suffixes(kinds=(kind,))`, run `assert_validator_flags(...)` (SC-009 pre-condition), run the command on the injected file (with appropriate args — for `subject-rename`/`session-rename` rename the containing subject/session), then run `assert_validator_passes(ignore_pre_existing=...)` (SC-009 post-condition).
+- [ ] T142 [P] Add `nonbids_robustness` pytest marker registration in `pyproject.toml` (`[tool.pytest.ini_options] markers`) so the new sweep can be selected/excluded with `pytest -m nonbids_robustness` / `-m "not nonbids_robustness"`. Apply the marker to all tests in `test_nonbids_sources.py`.
+- [ ] T143 [P] Update Phase 12 / CI: ensure the `nonbids_robustness` marker runs in CI alongside the existing `bids-examples` sweep (extend `tox.ini`'s default test command or add a dedicated env), and document in `tests/integration/README.md` how to run only this sweep locally.
+
+**Checkpoint**: `pytest -m nonbids_robustness` passes against an installed `bids-validator-deno` (and skips gracefully without it). Each of the five commands handles `__dup-NN`/`+mine`/`--crap`/`_test` source files cleanly.
+
+---
+
 ## Phase 12: Polish & Cross-Cutting Concerns
 
 **Purpose**: Improvements that affect multiple user stories.
@@ -437,7 +497,11 @@
 - **Phase 1 (Infrastructure)**: Depends on Phase 0 — BLOCKS all user stories
 - **Phase 1b (Annexed Content / FR-022)**: Depends on Phase 1. Can be done at any point but SHOULD be done before real-world usage on git-annex/DataLad datasets. Retroactively completes VCS integration from Phase 1.
 - **Phase 1c (Symlink Safety & Dry-Run Detail / FR-003, FR-023, FR-024)**: Depends on Phase 1b. BLOCKS real-world usage on annexed datasets — the symlink bug causes silent data loss (files not renamed). Should be done immediately after Phase 1b.
+- **Phase 1d (Test Fixture Pattern / FR-042)**: Depends on Phase 1. Independent of app code. BLOCKS Phase 5b. Strongly recommended before Phase 2a/2b for non-BIDS coverage.
 - **Phase 2 (Rename / US1)**: Depends on Phase 1
+- **Phase 2a (rename SRC DST refactor / FR-038, FR-039)**: Depends on Phase 2 (refactors existing T025–T030). Co-required with Phase 2b — cross-container `rename` delegates filename rewriting to `edit_filename`.
+- **Phase 2b (edit-filename / FR-040)**: Depends on Phase 1 + Phase 2 (replaces the entity-mutation behaviour of the original T025/T027). Co-required with Phase 2a.
+- **Phase 5b (Non-BIDS Source Sweep / FR-041, SC-009)**: Depends on Phases 2a, 2b, 5, 8 (all five commands implemented), and Phase 1d (worktree fixture + injection helper).
 - **Phase 3 (Migrate 1.x / US2)**: Depends on Phase 2 (uses rename for suffix changes)
 - **Phase 3a (Migration Rule Schema / FR-029, FR-030)**: Depends on Phase 3 (extends existing migrate.py)
 - **Phase 3b (Schema Audit / FR-033, FR-034)**: Depends on Phase 3a (needs level field and rule registry)
@@ -494,6 +558,9 @@ Phase 11 (Completion) can start immediately after Phase 1
 ### Incremental Delivery
 
 Each subsequent phase adds value without breaking prior phases:
+- Phase 1d adds the worktree-based test fixture pattern (foundation for FR-041/SC-009 coverage)
+- Phase 2a/2b is a **breaking pre-1.0 CLI refactor** of `rename` (mv-like) plus the new `edit-filename` command — release notes MUST flag the split.
+- Phase 5b verifies the five file-touching commands handle non-BIDS source files (heudiconv `__dup-NN`, plus adversarial `+mine`/`--crap`/`_test`) — closes bids-standard/bids-utils#14.
 - Phase 3a adds tiered migration levels (safe/advisory/non-auto-fixable)
 - Phase 3b adds schema audit (catches drift when bidsschematools updates)
 - Phase 3c adds BIDS URI fixup (reusable across all rename operations)

@@ -20,17 +20,56 @@ tox
 
 ## CLI Usage
 
-### Rename a file
+### Rename a file (mv-like)
+
+`bids-utils rename SRC DST` is pure path-rename — primary file plus
+sidecars plus `_scans.tsv` updates. Sidecars are matched by **full literal
+stem**, so heudiconv-style non-BIDS source filenames (`..._bold__dup-01.*`)
+are handled correctly.
 
 ```bash
-# Fix a task entity
-bids-utils rename sub-01/func/sub-01_task-rest_bold.nii.gz --set task=nback
+# Same-directory rename (e.g., dropping a non-BIDS __dup-01 segment)
+bids-utils rename \
+  sub-qa64/ses-20220217/func/sub-qa64_ses-20220217_task-rest_acq-p2_bold__dup-01.nii.gz \
+  sub-qa64/ses-20220217/func/sub-qa64_ses-20220217_task-rest_acq-p2_run-02_bold.nii.gz
 
-# Preview changes without modifying
-bids-utils rename sub-01/func/sub-01_task-rest_bold.nii.gz --set task=nback --dry-run
+# Cross-container move (sub- and ses- entity labels in the destination
+# filename are rewritten automatically to match the destination path)
+bids-utils rename \
+  sub-01/ses-pre/func/sub-01_ses-pre_task-rest_bold.nii.gz \
+  sub-02/ses-post/func/
+
+# Preview without modifying
+bids-utils rename SRC DST --dry-run
 
 # Machine-readable output
-bids-utils rename sub-01/func/sub-01_task-rest_bold.nii.gz --set task=nback --json
+bids-utils rename SRC DST --json
+```
+
+### Edit entity values in place (`edit-filename`)
+
+For changing entity values (`task`, `run`, `acq`, etc.) without moving the
+file to another folder, use `edit-filename`. This is the canonical home for what was
+`rename --set ...` in earlier drafts.
+
+```bash
+# Change the task entity potentially in multiple (runs, nii.gz and json etc) files
+bids-utils edit-filename sub-01/func/sub-01_task-rest_*bold.* --set task=nback
+
+# Multiple edits in one call (entities are emitted in schema-defined order
+# regardless of the order you list them) and across subjects
+bids-utils edit-filename sub-*/func/sub-*-rest_bold.nii.gz \
+  --set run=99 --set acq=p2
+
+# Delete an entity
+bids-utils edit-filename sub-01/func/sub-01_task-rest_acq-p2_bold.* --delete acq
+
+# Replace the suffix
+bids-utils edit-filename sub-*/func/sub-*_task-rest_bold.* --set-suffix cbv
+
+# Preview / JSON output work the same as `rename`
+bids-utils edit-filename SRC --set task=nback --dry-run
+bids-utils edit-filename SRC --set task=nback --json
 ```
 
 ### Migrate a dataset
@@ -97,21 +136,30 @@ bids-utils metadata aggregate sub-01/
 ```python
 from bids_utils import BIDSDataset
 from bids_utils.rename import rename_file
+from bids_utils.edit_filename import edit_filename
 from bids_utils.migrate import migrate_dataset
 from bids_utils.metadata import aggregate_metadata
 
 # Load a dataset
 dataset = BIDSDataset.from_path("path/to/dataset")
 
-# Rename a file
+# Rename a file (mv-like — primary + sidecars + _scans.tsv)
 result = rename_file(
     dataset,
-    path="sub-01/func/sub-01_task-rest_bold.nii.gz",
-    set_entities={"task": "nback"},
+    src_path="sub-qa64/ses-20220217/func/sub-qa64_ses-20220217_task-rest_acq-p2_bold__dup-01.nii.gz",
+    dst_path="sub-qa64/ses-20220217/func/sub-qa64_ses-20220217_task-rest_acq-p2_run-02_bold.nii.gz",
     dry_run=True,
 )
 for change in result.changes:
     print(f"{change.action}: {change.source} → {change.target}")
+
+# Edit entity values in place (replaces the old rename --set ...)
+result = edit_filename(
+    dataset,
+    path="sub-01/func/sub-01_task-rest_bold.nii.gz",
+    set_entities={"task": "nback", "run": "99"},
+    dry_run=True,
+)
 
 # Migrate
 result = migrate_dataset(dataset, to_version="1.9.0", dry_run=True)
