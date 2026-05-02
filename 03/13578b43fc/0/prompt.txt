@@ -51,3 +51,7 @@ the intention for ~/.claude/CLAUDE.md rules were to just stop progress from e.g.
 ---
 
 since we also have --set-suffix (not just entities) , I think it should be not edit-entities but edit-filename or alike. Adjust for that through the changes.    I also did some tuneups to ./.specify/specs/000-initial-design/quickstart.md -- please review. The idea is that we could apply conveniently to globs and potentially across subjects/sessions!   that might need reflections also back int spec
+
+---
+
+commit outstanding changes and propose next steps
