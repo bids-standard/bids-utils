@@ -519,25 +519,17 @@ No constitution violations identified. The plan follows all 11 principles:
 - TDD with bids-examples (Principle V)
 - Filename-rewrite logic centralised in `edit_filename` and reused by cross-container `rename` (Principle XI / DRY)
 
-## Pending Consistency Updates (post-2026-04-27 clarifications)
+## Cascade Status (post-2026-04-27 / 2026-05-02 clarifications)
 
-The following dependent design artifacts MUST be updated separately (per project rule that `/speckit.*` commands are bounded operations and dependent docs are *reported*, not auto-cascaded):
+All five design artifacts have been brought in line with the new FR-037..FR-043 / SC-009..SC-010 requirements (commit 59d25edd, 2026-05-02):
 
-1. **`contracts/library-api.md`**:
-   - `rename_file()` signature: drop `set_entities` and `new_suffix` parameters; replace with positional `dst_path: str | Path`. Add note about cross-container detection (delegates to `edit_filename`).
-   - Add new `bids_utils.edit_filename` API section: `edit_filename(dataset, path, *, set_entities, delete_entities, dry_run, ...)`.
-   - CLI Contract: update rename flags (positional `SRC DST`); add `edit-filename` command flags (`--set KEY=VALUE`, `--delete KEY`).
-2. **`data-model.md`**:
-   - `BIDSPath.from_path()` must explicitly preserve unrecognized non-BIDS trailing segments verbatim (no canonicalization). Document the FR-038 full-literal-stem rule alongside Sidecar Discovery.
-3. **`quickstart.md`**:
-   - Replace `bids-utils rename ... --set task=nback` examples with `bids-utils rename SRC DST` form, plus a parallel `bids-utils edit-filename SRC --set task=nback` example.
-4. **`tasks.md`**:
-   - Add new task block for Phase 1d (worktree fixture + injection helper + validator wrapper).
-   - Split existing rename tasks into 2a (`rename SRC DST`) + 2b (`edit-filename`).
-   - Add Phase 5b non-BIDS-source sweep tasks (parameterised across 5 commands × 4 suffix kinds).
-   - Mark old `--set`-based tasks/tests for rewrite, not deletion.
-5. **`spec.md` (000-initial-design.md)** — already updated in Session 2026-04-27.
-6. **`docs/`** (mkdocs site, if any rename docs exist) — once `quickstart.md` is updated, propagate.
-7. **`CHANGELOG`** / release notes — flag the breaking pre-1.0 CLI change for `rename`.
+- **`contracts/library-api.md`** — ✓ `rename_file()` mv-like signature; new `edit_filename()` section with `PathArg = PathLike | Sequence[PathLike]`; CLI Contract section covers the rename / edit-filename split and batch behavior.
+- **`data-model.md`** — ✓ `BIDSPath` has the `trailing` field for non-BIDS preservation; FR-038 full-literal-stem rule documented under Sidecar Discovery; "Batch atomicity (FR-043)" subsection added.
+- **`quickstart.md`** — ✓ examples updated to mv-like `rename SRC DST` plus `edit-filename` with glob input across subjects/sessions.
+- **`tasks.md`** — ✓ Phase 1d / 2a / 2b / 5b added (T126–T145); existing rename tasks marked for move-not-rewrite (`git mv` choreography).
+- **`spec.md`** — ✓ Session 2026-04-27 and 2026-05-02 clarifications recorded; FR-037..FR-043 + SC-009..SC-010 added.
 
-These updates SHOULD be requested explicitly (e.g., re-run `/speckit.tasks` for tasks.md, or address the others manually) before proceeding to `/speckit.implement` for the new phases.
+Remaining downstream work that is **not** part of `/speckit.plan` scope:
+
+- `docs/` (mkdocs site) — propagate quickstart changes if the rename docs land there.
+- `CHANGELOG` / release notes — flag the breaking pre-1.0 CLI change for `rename` once the Phase 2a/2b PR lands.

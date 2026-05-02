@@ -58,7 +58,7 @@ bids-utils edit-filename sub-01/func/sub-01_task-rest_*bold.* --set task=nback
 
 # Multiple edits in one call (entities are emitted in schema-defined order
 # regardless of the order you list them) and across subjects
-bids-utils edit-filename sub-*/func/sub-*-rest_bold.nii.gz \
+bids-utils edit-filename sub-*/func/sub-*_task-rest_bold.nii.gz \
   --set run=99 --set acq=p2
 
 # Delete an entity
