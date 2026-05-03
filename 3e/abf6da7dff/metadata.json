@@ -1,0 +1,30 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "3eabf6da7dff",
+  "strategy": "manual-commit",
+  "branch": "000-initial-design",
+  "checkpoints_count": 5,
+  "files_touched": [
+    ".specify/specs/000-initial-design/tasks.md",
+    "tests/integration/README.md",
+    "tests/integration/_nonbids_inject.py",
+    "tests/integration/_validator.py",
+    "tests/integration/_worktree_fixture.py",
+    "tests/integration/test_worktree_fixture.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/3e/abf6da7dff/0/metadata.json",
+      "transcript": "/3e/abf6da7dff/0/full.jsonl",
+      "content_hash": "/3e/abf6da7dff/0/content_hash.txt",
+      "prompt": "/3e/abf6da7dff/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 143,
+    "cache_creation_tokens": 370999,
+    "cache_read_tokens": 6824076,
+    "output_tokens": 64947,
+    "api_call_count": 62
+  }
+}
