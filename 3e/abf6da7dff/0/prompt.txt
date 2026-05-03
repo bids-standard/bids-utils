@@ -15,3 +15,7 @@ adjust also while staging prepare already a commit message to be used for staged
 ---
 
 the plan is to use this fixture also for other tests which we have using bids-examples, correct?  shouldn't existing fixtures/code be refactored for that?
+
+---
+
+commit these changes, and then /speckit.implement to RF existing tests to use this new feature. Ensure that testing runs fine
