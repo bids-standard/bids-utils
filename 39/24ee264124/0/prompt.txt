@@ -1,0 +1,35 @@
+/speckit.implement T126 T127 T128 T129 T130 — clean first PR (Phase 1d, all new code under tests/integration/, no app dependencies, unblocks SC-009/SC-010 verification on everything else).
+
+---
+
+I am confused in 'Not done (per the speckit-implement scope): no commit, no PR, no app-code changes' -- why nothing is staged and committed?
+
+---
+
+adjust default policy of staging all new implemented pieces to git to simplify review for me and introducing reviewable differences (not staged) for you
+
+---
+
+adjust also while staging prepare already a commit message to be used for staged changes, so I could just confirm to commit and we would be all set to go.
+
+---
+
+the plan is to use this fixture also for other tests which we have using bids-examples, correct?  shouldn't existing fixtures/code be refactored for that?
+
+---
+
+commit these changes, and then /speckit.implement to RF existing tests to use this new feature. Ensure that testing runs fine
+
+---
+
+/speckit.implement T146 — clean up after refactor: check tox output, run full tox if integration tests passed, stage changes, draft commit message.
+
+---
+
+<task-notification>
+<task-id>br6zokz78</task-id>
+<tool-use-id>toolu_01RV1cYDYiDXwYxKeKQjERxR</tool-use-id>
+<output-file>/tmp/claude-1000/-home-yoh-proj-bids-bids-utils/77d8af40-1fc8-4abd-a513-43779a0f1d03/tasks/br6zokz78.output</output-file>
+<status>completed</status>
+<summary>Background command "Run all integration tests" completed (exit code 0)</summary>
+</task-notification>
