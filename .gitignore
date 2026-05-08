@@ -37,3 +37,5 @@ Thumbs.db
 .env.*
 uv.lock
 .duct
+
+*.lock

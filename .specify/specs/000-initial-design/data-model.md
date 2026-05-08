@@ -41,14 +41,25 @@ class BIDSPath:
     suffix: str               # e.g., "bold", "T1w", "events"
     extension: str            # e.g., ".nii.gz", ".json", ".tsv"
     datatype: str             # e.g., "func", "anat", "fmap" (from directory)
+    trailing: str = ""        # Non-BIDS trailing segment preserved verbatim
+                              # (e.g., "__dup-01" from heudiconv). Empty for valid BIDS.
 
     @classmethod
     def from_path(cls, path: Path, schema: Schema) -> BIDSPath: ...
+    # Robust to non-BIDS filenames (FR-038): captures unrecognized trailing
+    # segments after the suffix in `trailing` rather than failing. This enables
+    # rename/edit-filename to operate on heudiconv duplicate-run output
+    # (`..._bold__dup-01.nii.gz`) without canonicalization. Explicit
+    # canonicalization is deferred to a future `normalize` command (FR-037).
 
-    def to_filename(self) -> str: ...
+    def to_filename(self, schema: BIDSSchema | None = None) -> str: ...
+    # When `schema` is provided, entities are emitted in `schema.entity_order()`
+    # rather than dict insertion order (FR-035). The `trailing` segment, if any,
+    # is appended verbatim before the extension.
     def to_relative_path(self) -> Path: ...  # Includes sub-/ses-/datatype/ dirs
 
     def with_entities(self, **overrides: str) -> BIDSPath: ...
+    def without_entities(self, *keys: str) -> BIDSPath: ...   # FR-040 / edit-filename --delete
     def with_suffix(self, suffix: str) -> BIDSPath: ...
     def with_extension(self, extension: str) -> BIDSPath: ...
 ```
@@ -61,15 +72,22 @@ Abstract interface for version control operations.
 class VCSBackend(Protocol):
     name: str  # "none", "git", "git-annex", "datalad"
 
+    # Core filesystem operations
     def move(self, src: Path, dst: Path) -> None: ...
     def remove(self, path: Path) -> None: ...
     def is_dirty(self) -> bool: ...
     def commit(self, message: str, paths: list[Path]) -> None: ...
 
-class NoVCS: ...      # Direct filesystem operations
-class Git: ...        # git mv, git rm, git commit
-class GitAnnex: ...   # git annex commands + git operations
-class DataLad: ...    # datalad run semantics
+    # Annex content lifecycle (FR-022, FR-023)
+    def has_content(self, path: Path) -> bool: ...
+    def get_content(self, paths: list[Path]) -> None: ...
+    def unlock(self, paths: list[Path]) -> None: ...
+    def add(self, paths: list[Path]) -> None: ...
+
+class NoVCS: ...      # Direct filesystem; has_content=True, unlock/add no-op
+class Git: ...        # git mv/rm/commit; has_content=True, unlock no-op, add=`git add`
+class GitAnnex: ...   # git annex get/unlock/add; checks symlink target for has_content
+class DataLad: ...    # datalad get/unlock; add via `git annex add`
 ```
 
 **Detection order**: DataLad → GitAnnex → Git → NoVCS (most specific first).
@@ -94,6 +112,16 @@ class Change:
     target: Path | None  # None for delete/modify
     detail: str          # Human-readable description
 ```
+
+**Batch atomicity (FR-043).** `rename_file()` and `edit_filename()` accept
+either a single `PathLike` or a sequence of paths. When a batch is passed,
+the implementation precomputes every (source, target) pair, validates the
+whole batch (no missing source, no target collision, no schema violation),
+and only then begins filesystem mutation. If any precondition fails, the
+returned `OperationResult` has `success=False`, `errors` populated, and the
+filesystem is left untouched (verified by SC-010). `_scans.tsv` updates
+are aggregated per `(subject, session)` so a batch produces one update
+per scans file rather than one per source.
 
 ## Schema Access
 
@@ -129,6 +157,27 @@ Output: [
 ```
 
 Extensions to check come from the schema (for the given suffix).
+
+**FR-038 — full-literal-stem rule for non-BIDS source filenames.** When the
+primary file does not parse as a valid `BIDSPath` (e.g., heudiconv duplicate
+output `..._bold__dup-01.nii.gz`), `find_sidecars()` falls back to using the
+**full literal stem** (basename minus final extension) for sibling matching.
+Only files sharing that exact stem are treated as sidecars. The function
+MUST NOT canonicalize or strip non-BIDS trailing segments before comparison.
+Rationale: heudiconv emits a paired sidecar per duplicate (each `__dup-NN`
+carries its own acquisition metadata); merging them would be semantically
+wrong. This is also the only safe default for unrecognized non-BIDS suffixes
+from other tools (e.g., `+mine`, `--crap`, stray `_test`).
+
+```
+Input:  sub-01/func/sub-01_task-rest_bold__dup-01.nii.gz   # non-BIDS
+Output: [
+    sub-01/func/sub-01_task-rest_bold__dup-01.json,        # full-literal-stem match
+    sub-01/func/sub-01_task-rest_bold__dup-01.bvec,        # full-literal-stem match
+]
+# (sub-01/func/sub-01_task-rest_bold.json, if it existed, is NOT returned —
+#  it's a different sidecar set for a different acquisition.)
+```
 
 ### Scans File Model
 

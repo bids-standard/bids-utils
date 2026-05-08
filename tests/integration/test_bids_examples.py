@@ -6,7 +6,7 @@ Run with: pytest tests/integration/ -m integration
 
 from __future__ import annotations
 
-import shutil
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -22,7 +22,6 @@ from bids_utils.session import rename_session
 from bids_utils.subject import remove_subject, rename_subject
 from tests.conftest import (
     BIDS_EXAMPLES_DIR,
-    _git,
     requires_bids_examples,
     requires_bids_validator,
     requires_git_annex,
@@ -30,6 +29,16 @@ from tests.conftest import (
     validated_dataset_ids,
     validated_session_dataset_ids,
 )
+from tests.integration._worktree_fixture import (
+    bids_examples_worktree,
+    bids_examples_worktree_annexed,
+)
+
+__all__ = [
+    # Re-export pytest fixtures so they're injectable in this module.
+    "bids_examples_worktree",
+    "bids_examples_worktree_annexed",
+]
 
 
 def _assert_no_new_errors(
@@ -96,13 +105,6 @@ def _load_example_dataset(ds_name: str) -> tuple[Path, BIDSDataset]:
 
 def _dataset_ids() -> list[str]:
     return [d.name for d in _iter_datasets()]
-
-
-def _copy_dataset(src: Path, tmp_path: Path) -> Path:
-    """Copy a bids-examples dataset to a temp dir for mutation."""
-    dst = tmp_path / src.name
-    shutil.copytree(src, dst)
-    return dst
 
 
 def _find_renameable_file(ds_path: Path) -> Path | None:
@@ -230,7 +232,9 @@ class TestRenameMutating:
     """Actually rename a file in a copy and verify file counts match."""
 
     @pytest.mark.ai_generated
-    def test_rename_preserves_file_count(self, tmp_path: Path) -> None:
+    def test_rename_preserves_file_count(
+        self, bids_examples_worktree: Callable[[str], Path]
+    ) -> None:
         """Pick a dataset, copy it, rename one file, check file count."""
         datasets = _iter_datasets()
         # Find a dataset with .nii.gz files
@@ -242,7 +246,7 @@ class TestRenameMutating:
         if picked is None:
             pytest.skip(reason="no dataset with sub-*_*.nii.gz files found")
 
-        ds_copy = _copy_dataset(picked, tmp_path)
+        ds_copy = bids_examples_worktree(picked.name)
         ds = BIDSDataset.from_path(ds_copy)
 
         nii_files = sorted(ds_copy.rglob("sub-*_*.nii.gz"))
@@ -540,8 +544,12 @@ class TestRenameMutatingValidated:
 
     @pytest.mark.ai_generated
     @pytest.mark.parametrize("ds_name", validated_dataset_ids())
-    def test_rename_validated(self, ds_name: str, tmp_path: Path) -> None:
-        ds_copy = _copy_dataset(BIDS_EXAMPLES_DIR / ds_name, tmp_path)
+    def test_rename_validated(
+        self,
+        ds_name: str,
+        bids_examples_worktree: Callable[[str], Path],
+    ) -> None:
+        ds_copy = bids_examples_worktree(ds_name)
         ds = BIDSDataset.from_path(ds_copy)
 
         target = _find_renameable_file(ds_copy)
@@ -577,9 +585,11 @@ class TestSubjectRenameMutatingValidated:
     @pytest.mark.ai_generated
     @pytest.mark.parametrize("ds_name", validated_dataset_ids())
     def test_subject_rename_validated(
-        self, ds_name: str, tmp_path: Path
+        self,
+        ds_name: str,
+        bids_examples_worktree: Callable[[str], Path],
     ) -> None:
-        ds_copy = _copy_dataset(BIDS_EXAMPLES_DIR / ds_name, tmp_path)
+        ds_copy = bids_examples_worktree(ds_name)
         ds = BIDSDataset.from_path(ds_copy)
 
         sub_dirs = sorted(
@@ -619,9 +629,11 @@ class TestSessionRenameMutatingValidated:
     @pytest.mark.ai_generated
     @pytest.mark.parametrize("ds_name", validated_session_dataset_ids())
     def test_session_rename_validated(
-        self, ds_name: str, tmp_path: Path
+        self,
+        ds_name: str,
+        bids_examples_worktree: Callable[[str], Path],
     ) -> None:
-        ds_copy = _copy_dataset(BIDS_EXAMPLES_DIR / ds_name, tmp_path)
+        ds_copy = bids_examples_worktree(ds_name)
         ds = BIDSDataset.from_path(ds_copy)
 
         found = _find_first_session(ds_copy)
@@ -656,8 +668,12 @@ class TestMigrateMutatingValidated:
 
     @pytest.mark.ai_generated
     @pytest.mark.parametrize("ds_name", validated_dataset_ids())
-    def test_migrate_validated(self, ds_name: str, tmp_path: Path) -> None:
-        ds_copy = _copy_dataset(BIDS_EXAMPLES_DIR / ds_name, tmp_path)
+    def test_migrate_validated(
+        self,
+        ds_name: str,
+        bids_examples_worktree: Callable[[str], Path],
+    ) -> None:
+        ds_copy = bids_examples_worktree(ds_name)
         ds = BIDSDataset.from_path(ds_copy)
 
         result = migrate_dataset(ds)
@@ -676,34 +692,16 @@ class TestMigrateMutatingValidated:
 # ---------------------------------------------------------------------------
 
 
-def _annexify_dataset(src: Path, tmp_path: Path) -> Path:
-    """Copy a dataset, init git-annex, force ALL files into annex."""
-    dst = tmp_path / src.name
-    shutil.copytree(src, dst)
-
-    _git(dst, "init")
-    _git(dst, "config", "user.email", "test@test.com")
-    _git(dst, "config", "user.name", "Test")
-    _git(dst, "annex", "init", "test")
-    # Force all files into annex (including .json, .tsv)
-    _git(dst, "config", "annex.largefiles", "anything")
-    _git(dst, "annex", "add", ".")
-    _git(dst, "add", ".")
-    _git(dst, "commit", "-m", "init annexed")
-
-    return dst
-
-
-def _load_annexified_dataset(
-    ds_name: str, tmp_path: Path
+def _load_annexed_dataset(
+    bids_examples_worktree_annexed: Callable[[str], Path],
+    ds_name: str,
 ) -> tuple[Path, BIDSDataset]:
-    """Copy + annexify a bids-examples dataset and return (path, BIDSDataset).
+    """Materialise a bids-examples dataset via the FR-042 annexed fixture.
 
     ``annexed_mode`` is set to ``SKIP`` so tests don't require actual
     annex content to be fetched.
     """
-    src = BIDS_EXAMPLES_DIR / ds_name
-    ds_path = _annexify_dataset(src, tmp_path)
+    ds_path = bids_examples_worktree_annexed(ds_name)
     ds = BIDSDataset.from_path(ds_path)
     ds.annexed_mode = AnnexedMode.SKIP
     return ds_path, ds
@@ -753,9 +751,11 @@ class TestAnnexRenameSweep:
     @pytest.mark.ai_generated
     @pytest.mark.parametrize("ds_name", _annex_dataset_ids())
     def test_rename_dry_run_annex(
-        self, ds_name: str, tmp_path: Path
+        self,
+        ds_name: str,
+        bids_examples_worktree_annexed: Callable[[str], Path],
     ) -> None:
-        ds_path, ds = _load_annexified_dataset(ds_name, tmp_path)
+        ds_path, ds = _load_annexed_dataset(bids_examples_worktree_annexed, ds_name)
 
         target = _find_renameable_file(ds_path)
         if target is None:
@@ -771,10 +771,12 @@ class TestAnnexRenameSweep:
     @pytest.mark.ai_generated
     @pytest.mark.parametrize("ds_name", _annex_dataset_ids())
     def test_rename_mutating_annex(
-        self, ds_name: str, tmp_path: Path
+        self,
+        ds_name: str,
+        bids_examples_worktree_annexed: Callable[[str], Path],
     ) -> None:
         """Actually rename a file in an annexed dataset."""
-        ds_path, ds = _load_annexified_dataset(ds_name, tmp_path)
+        ds_path, ds = _load_annexed_dataset(bids_examples_worktree_annexed, ds_name)
 
         target = _find_renameable_file(ds_path)
         if target is None:
@@ -799,9 +801,11 @@ class TestAnnexSubjectRenameSweep:
     @pytest.mark.ai_generated
     @pytest.mark.parametrize("ds_name", _annex_dataset_ids())
     def test_subject_rename_annex(
-        self, ds_name: str, tmp_path: Path
+        self,
+        ds_name: str,
+        bids_examples_worktree_annexed: Callable[[str], Path],
     ) -> None:
-        ds_path, ds = _load_annexified_dataset(ds_name, tmp_path)
+        ds_path, ds = _load_annexed_dataset(bids_examples_worktree_annexed, ds_name)
 
         sub_dirs = sorted(
             d
@@ -845,9 +849,11 @@ class TestAnnexSessionRenameSweep:
         ],
     )
     def test_session_rename_annex(
-        self, ds_name: str, tmp_path: Path
+        self,
+        ds_name: str,
+        bids_examples_worktree_annexed: Callable[[str], Path],
     ) -> None:
-        ds_path, ds = _load_annexified_dataset(ds_name, tmp_path)
+        ds_path, ds = _load_annexed_dataset(bids_examples_worktree_annexed, ds_name)
 
         found = _find_first_session(ds_path)
         if found is None:
