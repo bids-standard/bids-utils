@@ -67,3 +67,7 @@ we indeed must address those priority fixes!  since bids_examples is a git (or g
 as for errors -- we must not swallow errors indeed!   
 
 I am not clear on drift on TSV -- please elaborate first . Nits - indeed for the next round
+
+---
+
+there is lots of staged changes. Review/ commit , potentially splitting changes to spec from code changes and otherwise making atomic commits
