@@ -1,0 +1,32 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "04bb1950f606",
+  "strategy": "manual-commit",
+  "branch": "001-consistent-inout",
+  "checkpoints_count": 2,
+  "files_touched": [
+    ".specify/specs/001-consistent-inout/json_five_keys_manipulation_bug.py",
+    ".specify/specs/001-consistent-inout/json_five_manipulation_probe.py",
+    ".specify/specs/001-consistent-inout/json_five_modeldumper_state_bug.py",
+    ".specify/specs/001-consistent-inout/json_five_modeldumper_state_bug_minimal.py",
+    ".specify/specs/001-consistent-inout/json_five_modeldumper_state_bug_minimal2.py",
+    ".specify/specs/001-consistent-inout/json_five_modeldumper_state_bug_minimal3.py",
+    ".specify/specs/001-consistent-inout/library-survey.md",
+    ".specify/specs/001-consistent-inout/round_trip_repro.sh"
+  ],
+  "sessions": [
+    {
+      "metadata": "/04/bb1950f606/0/metadata.json",
+      "transcript": "/04/bb1950f606/0/full.jsonl",
+      "content_hash": "/04/bb1950f606/0/content_hash.txt",
+      "prompt": "/04/bb1950f606/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 327,
+    "cache_creation_tokens": 2456991,
+    "cache_read_tokens": 34549050,
+    "output_tokens": 236439,
+    "api_call_count": 223
+  }
+}
