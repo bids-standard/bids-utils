@@ -1,0 +1,63 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "1be6aab7781a",
+  "session_id": "d1444e57-c35a-4eb8-a6bb-9f2ed759e12c",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-09T13:04:22.343896246Z",
+  "branch": "001-consistent-inout",
+  "checkpoints_count": 2,
+  "files_touched": [
+    ".specify/specs/001-consistent-inout/json_five_keys_manipulation_bug.py",
+    ".specify/specs/001-consistent-inout/json_five_manipulation_probe.py",
+    ".specify/specs/001-consistent-inout/json_five_modeldumper_state_bug.py",
+    ".specify/specs/001-consistent-inout/json_five_modeldumper_state_bug_minimal.py",
+    ".specify/specs/001-consistent-inout/json_five_modeldumper_state_bug_minimal2.py",
+    ".specify/specs/001-consistent-inout/json_five_modeldumper_state_bug_minimal3.py",
+    ".specify/specs/001-consistent-inout/library-survey.md",
+    ".specify/specs/001-consistent-inout/round_trip_repro.sh"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-7[1m]",
+  "turn_id": "f7af6afdcb71",
+  "token_usage": {
+    "input_tokens": 307,
+    "cache_creation_tokens": 2136456,
+    "cache_read_tokens": 30339978,
+    "output_tokens": 227665,
+    "api_call_count": 208
+  },
+  "session_metrics": {
+    "turn_count": 17
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-09T13:04:22.257608092Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 0,
+    "total_lines_changed": 0,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 19,
+      "user_lines_removed": 0,
+      "agent_lines_added": 3380,
+      "agent_lines_removed": 210,
+      "user_added_per_file": {
+        ".git-meta/COMMIT_MSG": 19
+      }
+    }
+  ]
+}
