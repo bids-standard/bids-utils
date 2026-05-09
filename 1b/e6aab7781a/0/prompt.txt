@@ -75,3 +75,7 @@ there is lots of staged changes. Review/ commit , potentially splitting changes 
 ---
 
 ok, I have upgraded entire -- please try again and let's see if may be this interfering behavior no longer comes up
+
+---
+
+could you please show steps you are doing and effects of them so I could report issue to entire cli?
