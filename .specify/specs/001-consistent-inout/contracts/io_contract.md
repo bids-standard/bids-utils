@@ -15,11 +15,15 @@ acceptance surface for tests.
 
 ## Part A — Python API contract
 
-### `bids_utils._format`
+### `bids_utils._format` (package — re-exports from sub-modules)
 
 ```python
+from collections.abc import MutableMapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Protocol
+
+# ── Dataclasses (from _format/_profile.py) ────────────────────────────
 
 @dataclass(frozen=True)
 class FormattingProfile:
@@ -48,14 +52,59 @@ DEFAULT_JSON_PROFILE: FormattingProfile  # FR-006
 DEFAULT_TSV_PROFILE: TSVFormattingProfile
 DEFAULT_TEXT_PROFILE: TextFormattingProfile
 
-def detect_json_profile(source: bytes) -> FormattingProfile: ...
-def serialize_json(data: dict, profile: FormattingProfile) -> bytes: ...
+# ── Backend Protocol (from _format/_json_backend.py) ──────────────────
+
+class JSONBackend(Protocol):
+    def parse(self, source: bytes) -> Any: ...
+    def serialize(self, model: Any, profile: FormattingProfile) -> bytes: ...
+    def detect_profile(self, source: bytes) -> FormattingProfile: ...
+    def get_keys(self, model: Any) -> list[str]: ...
+    def get_value(self, model: Any, key: str) -> Any: ...
+    def set_value(self, model: Any, key: str, value: Any) -> None: ...
+    def append_key(self, model: Any, key: str, value: Any) -> None: ...
+    def delete_key(self, model: Any, key: str) -> None: ...
+
+# ── Format-preserving JSON document (from _format/_json.py) ───────────
+
+class JSONDocument(MutableMapping[str, Any]):
+    """Format-preserving JSON document. Use like a dict.
+
+    - __getitem__ returns Python values (lists, plain dicts for nested
+      objects, strings, numbers, bools, None).
+    - __setitem__ append-if-new, replace-if-exists.
+    - __delitem__ removes the key.
+    - Nested object views are plain dicts; mutate-and-assign-back to
+      propagate (see quickstart.md).
+    """
+    profile: FormattingProfile
+
+    def to_dict(self) -> dict: ...
+
+def parse_json(source: bytes) -> tuple[JSONDocument, FormattingProfile]: ...
+def serialize_json(
+    data: JSONDocument | dict,
+    profile: FormattingProfile,
+) -> bytes:
+    """Polymorphic on input type:
+    - JSONDocument: byte-perfect round-trip via the backend.
+    - dict: stdlib json.dumps parameterized by profile (FR-006 path).
+    """
+
+# ── TSV (from _format/_tsv.py) ────────────────────────────────────────
+
 def detect_tsv_profile(source: bytes) -> TSVFormattingProfile: ...
-def serialize_tsv(rows: list[dict[str, str]],
-                  profile: TSVFormattingProfile,
-                  changed_indices: set[int] | None = None) -> bytes: ...
+def serialize_tsv(
+    rows: list[dict[str, str]],
+    profile: TSVFormattingProfile,
+    changed_indices: set[int] | None = None,
+) -> bytes: ...
+
+# ── Text (from _format/_text.py) ──────────────────────────────────────
+
 def detect_text_profile(source: bytes) -> TextFormattingProfile: ...
 def serialize_text(text: str, profile: TextFormattingProfile) -> bytes: ...
+
+# ── Write helper (from _format/_write.py) ─────────────────────────────
 
 def write_if_changed(path: Path, new_bytes: bytes) -> bool: ...
 ```
@@ -63,24 +112,48 @@ def write_if_changed(path: Path, new_bytes: bytes) -> bool: ...
 ### `bids_utils._io` (additions)
 
 ```python
-from bids_utils._format import FormattingProfile
+from bids_utils._format import (
+    FormattingProfile,
+    JSONDocument,
+    TextFormattingProfile,
+)
 
 def read_json_with_profile(
     path: Path,
     vcs: VCSBackend | None,
     mode: AnnexedMode = AnnexedMode.ERROR,
-) -> tuple[dict | None, FormattingProfile | None]:
-    """Read JSON and return (parsed_data, profile_for_round_trip).
-    profile is None iff parsed_data is None."""
+) -> tuple[JSONDocument | None, FormattingProfile | None]:
+    """Read JSON and return (document, profile).
+    profile is None iff document is None.
+    The returned JSONDocument carries `profile` on `.profile`; the
+    tuple shape is symmetric with `read_tsv_with_profile`."""
 
 def write_json(
     path: Path,
-    data: dict,
+    data: JSONDocument | dict,
     vcs: VCSBackend,
     profile: FormattingProfile | None = None,
 ) -> bool:
     """Serialize *data* using *profile* (default if None) and write iff
-    bytes differ from disk. Returns True iff a write occurred."""
+    bytes differ from disk. Returns True iff a write occurred.
+
+    - If *data* is a JSONDocument: profile defaults to data.profile
+      (the json-five-backed path). An explicit profile= overrides.
+    - If *data* is a dict: profile defaults to DEFAULT_JSON_PROFILE
+      (the stdlib path; FR-006 new-file behavior)."""
+
+def read_text_with_profile(
+    path: Path,
+    vcs: VCSBackend | None,
+    mode: AnnexedMode = AnnexedMode.ERROR,
+) -> tuple[str | None, TextFormattingProfile | None]: ...
+
+def write_text(
+    path: Path,
+    text: str,
+    vcs: VCSBackend,
+    profile: TextFormattingProfile | None = None,
+) -> bool: ...
 ```
 
 ### `bids_utils._tsv` (additions)
@@ -108,10 +181,30 @@ def write_tsv(
 The pre-existing signatures `read_json(path, vcs, mode) -> dict | None`
 and `write_json(path, data, vcs) -> None`, `read_tsv(path, vcs,
 annexed_mode) -> list[dict]`, `write_tsv(path, rows, vcs)` remain
-importable and behaviorally equivalent (with `write_json` returning
-`None` to preserve type), per Principle X. They internally call the
-profile-aware path with `profile=DEFAULT_*_PROFILE` and discard the
-returned bool.
+importable and behaviorally equivalent. Per Principle X:
+
+- Legacy `read_json` internally calls `read_json_with_profile` and
+  returns `doc.to_dict()` (dropping the profile). Callers that only
+  read continue to work without changes.
+- Legacy `write_json(path, dict, vcs)` is the stdlib new-file path;
+  it internally calls the profile-aware path with
+  `profile=DEFAULT_JSON_PROFILE` and discards the returned bool.
+- TSV legacy signatures are analogous.
+
+### Adapter contract (new)
+
+The `JSONBackend` Protocol IS a load-bearing interface contract. Any
+future implementation must conform to its signatures AND pass
+`tests/test_format_json_backend.py`, which encodes:
+- the six R1.1 defenses (state-bug, mutation symmetry, etc.) as
+  positive tests on the backend;
+- the round-trip identity expectation on the bids-examples corpus
+  (delegated test, optionally skipped in fast CI).
+
+A new backend module shipping alongside `_json_backend.py` (e.g.,
+`_json_backend_stdlib.py`) plus a one-line change to
+`_format/_json.py` that selects between them is the supported swap
+mechanism. No call site changes are required for a swap.
 
 ---
 
@@ -200,12 +293,18 @@ gate).
 | Contract clause | Test |
 |---|---|
 | A (signatures) | `tests/test_format.py::test_signatures_present` |
+| A (Protocol) | `tests/test_format_json_backend.py::test_default_backend_conforms_to_protocol` |
+| A (adapter defenses R1.1.1) | `tests/test_format_json_backend.py::test_serialize_is_stateless_across_calls` |
+| A (adapter defenses R1.1.2) | `tests/test_format_json_backend.py::test_set_value_routes_through_canonical_lists` |
+| A (adapter defenses R1.1.3) | `tests/test_format_json_backend.py::test_serialize_asserts_keys_values_length` |
+| A (adapter defenses R1.1.5) | `tests/test_format_json_backend.py::test_append_key_mirrors_whitespace` |
+| A (adapter defenses R1.1.6) | `tests/test_format_json_backend.py::test_parse_falls_back_to_stdlib_on_json5_failure` |
 | B.1 | `tests/integration/test_format_preservation.py::test_no_op_byte_identity` |
 | B.2 (JSON) | `tests/integration/test_format_preservation.py::test_one_field_edit_diff_size` |
 | B.2 (TSV) | `tests/integration/test_format_preservation.py::test_one_row_edit_diff_size` |
 | B.3 | `tests/test_format.py::test_new_key_appended_at_end` |
 | B.4 | `tests/test_format.py::test_default_profile_for_new_file` |
-| B.5 | `tests/test_format.py::test_no_bypass_writers_in_repo` (meta-test) |
+| B.5 | `tests/test_format.py::test_no_bypass_writers_in_repo` (meta-test; also asserts only `_json_backend.py` imports `json5`) |
 | B.6 | `tests/test_format.py::test_correctness_wins_over_preservation` |
 | B.7 | `tests/test_dry_run.py::test_dry_run_diff_matches_real_run` (extension) |
 | B.8 | `tests/integration/test_format_preservation.py::test_perf_within_budget` |

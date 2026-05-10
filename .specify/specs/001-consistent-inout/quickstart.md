@@ -18,16 +18,35 @@ default (FR-006).
 ```python
 from bids_utils._io import read_json_with_profile, write_json
 
-data, profile = read_json_with_profile(sidecar_path, vcs, mode)
-if data is None:
+doc, profile = read_json_with_profile(sidecar_path, vcs, mode)
+if doc is None:
     return  # skipped or unreadable
 
-# ... mutate data in place ...
-data["NewField"] = "value"
+# `doc` is a JSONDocument — use it like a dict.
+# Format (indent, separators, key order, BOM, …) is preserved
+# byte-for-byte through the json-five backend.
+doc["NewField"] = "value"
+doc["IntendedFor"] = ["new/path.nii.gz"]
+del doc["DeprecatedField"]
 
 # write_if_changed is implicit; returns True iff bytes changed
-wrote = write_json(sidecar_path, data, vcs, profile=profile)
+wrote = write_json(sidecar_path, doc, vcs, profile=profile)
 ```
+
+### Nested object semantics
+
+`doc["nested"]` returns a **plain dict view**, NOT a nested
+`JSONDocument`. To write a nested change, mutate locally and assign
+the whole subtree back:
+
+```python
+nested = doc["Nested"]                # plain dict
+nested["NewKey"] = "value"            # local mutation only
+doc["Nested"] = nested                # MUST assign back to propagate
+```
+
+This is intentional. Most BIDS sidecars are flat or shallow, and the
+explicit assign-back makes the mutation site easy to grep for.
 
 ## Minimal example — TSV
 
@@ -56,14 +75,34 @@ jf.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 ```python
 from bids_utils._io import read_json_with_profile, write_json
 
-data, profile = read_json_with_profile(jf, vcs, annexed_mode)
-data["X"] = "y"
-write_json(jf, data, vcs, profile=profile)
+doc, profile = read_json_with_profile(jf, vcs, annexed_mode)
+doc["X"] = "y"
+write_json(jf, doc, vcs, profile=profile)
 ```
 
-That's the whole change. The profile carries indent, separators, line
-endings, BOM, and trailing-newline state through to the write. No-op
+That's the whole change. The `JSONDocument` carries the json-five model
+internally; mutations route through the safe canonical-list path. No-op
 write suppression (FR-007) happens automatically.
+
+### Why `JSONDocument` and not a plain dict?
+
+The legacy `read_json` still exists and still returns a plain `dict`,
+so simple read-only call sites can stay on it. But for read-modify-write,
+the plain-dict path cannot preserve the source's *exact* indent /
+separator / per-line whitespace style — it can only reproduce a
+canonical form. The `JSONDocument` carries the parsed model alongside
+the dict-like API so mutations preserve byte-level formatting around
+the unchanged keys. Empirically (see `library-survey.md` §7.1) this
+achieves 99.91% byte-identity on the bids-examples corpus.
+
+### About the json-five dependency
+
+The format-preservation backend is `json-five` (PyPI:
+[`json-five`](https://pypi.org/project/json-five/), import name
+`json5`). It is isolated to a single internal module
+`bids_utils._format._json_backend`; everything else, including
+`JSONDocument` itself, uses only stdlib types. If the backend ever
+needs to be replaced, that one file is the swap target.
 
 ## Verifying the contract locally
 
@@ -85,15 +124,17 @@ in both regular-git and tmp_annex_dataset modes (constitution VII).
 
 ## Defaults for new files (FR-006)
 
-If you are writing a file that has no source on disk:
+If you are writing a file that has no source on disk, pass a plain
+dict (or list of dicts for TSV) — the stdlib path takes over and uses
+the default profile:
 
 ```python
-write_json(new_sidecar_path, data, vcs)            # profile=None → DEFAULT_JSON_PROFILE
-write_tsv(new_tsv_path, rows, vcs)                 # profile=None → DEFAULT_TSV_PROFILE
+write_json(new_sidecar_path, {"key": "value"}, vcs)  # profile=None → DEFAULT_JSON_PROFILE
+write_tsv(new_tsv_path, rows, vcs)                   # profile=None → DEFAULT_TSV_PROFILE
 ```
 
 The defaults are 2-space indent for JSON, LF line endings, trailing
-newline, no BOM. They are defined once in `_format.py` —
+newline, no BOM. They are defined once in `_format._profile` —
 `DEFAULT_JSON_PROFILE`, `DEFAULT_TSV_PROFILE`, `DEFAULT_TEXT_PROFILE` —
 and must not be redefined per command.
 
