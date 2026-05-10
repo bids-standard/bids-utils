@@ -69,3 +69,7 @@ commit and then /speckit-implement
 ---
 
 A first, commit, then B in a subsequent round
+
+---
+
+Continue: check /tmp/claude-1000/-home-yoh-proj-bids-bids-utils/77d8af40-1fc8-4abd-a513-43779a0f1d03/tasks/btpppxk8v.output for tox py3 completion, then summarize the report per the original Phase 3c task.
