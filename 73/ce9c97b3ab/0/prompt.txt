@@ -87,3 +87,7 @@ so there is no bug now and no issue to file  for entire?  and yes -- proceed wit
 ---
 
 again -- sounds like there is still bug in entire which interfers with our ability to commit. Can you formulate first really succinctly the issue and brief demo?
+
+---
+
+go ahead
