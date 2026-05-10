@@ -61,3 +61,7 @@ check user wide CLAUDE.md -- it must be talking about /home/yoh/.claude/gh-token
 ---
 
 yes, draft and stage the changes -- I will review , we could revert or tune where needed before commit
+
+---
+
+commit and then /speckit-implement
