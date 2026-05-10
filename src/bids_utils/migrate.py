@@ -1131,7 +1131,8 @@ def _apply_field_rename(
         # Merge into new field (handle Sources consolidation).
         # Normalize both sides to lists so mixed string/array types merge
         # correctly; 3-way merges (e.g. Sources + BasedOn + RawSources) work
-        # iteratively as each rule runs.
+        # iteratively as each rule runs.  Deduplicate on merge (FR-029) so an
+        # incoming URI already present in the destination is not added twice.
         if rule.new_field:
             existing = data.get(rule.new_field)
             if existing is None:
@@ -1141,7 +1142,11 @@ def _apply_field_rename(
                     list(existing) if isinstance(existing, list) else [existing]
                 )
                 value_list = list(value) if isinstance(value, list) else [value]
-                data[rule.new_field] = existing_list + value_list
+                merged = list(existing_list)
+                for item in value_list:
+                    if item not in merged:
+                        merged.append(item)
+                data[rule.new_field] = merged
         if vcs is not None:
             _write_json(jf, data, vcs)
         else:

@@ -180,6 +180,69 @@ class TestFieldRename:
             "rawsources.nii",
         }
 
+    @pytest.mark.ai_generated
+    def test_sources_array_plus_string_merge(self, tmp_path: Path) -> None:
+        """Pre-existing array Sources + incoming string RawSources merges into list."""
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        func = ds_path / "sub-01" / "func"
+        func.mkdir(parents=True)
+        sidecar = func / "sub-01_task-rest_bold.json"
+        sidecar.write_text(
+            json.dumps(
+                {
+                    "Sources": ["bids:raw:sub-01/anat/sub-01_T1w.nii.gz"],
+                    "RawSources": "bids:raw:sub-01/dwi/sub-01_dwi.nii.gz",
+                }
+            )
+        )
+
+        ds = BIDSDataset.from_path(ds_path)
+        migrate_dataset(ds)
+
+        data = json.loads(sidecar.read_text())
+        assert "RawSources" not in data
+        assert isinstance(data["Sources"], list)
+        assert len(data["Sources"]) == 2
+        assert set(data["Sources"]) == {
+            "bids:raw:sub-01/anat/sub-01_T1w.nii.gz",
+            "bids:raw:sub-01/dwi/sub-01_dwi.nii.gz",
+        }
+
+    @pytest.mark.ai_generated
+    def test_sources_merge_dedups_duplicates(self, tmp_path: Path) -> None:
+        """Incoming URI already present in pre-existing Sources is not duplicated.
+
+        FR-029: merging behavior preserves data without introducing duplicate
+        entries when the same URI appears in both the destination and the
+        incoming field.
+        """
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        func = ds_path / "sub-01" / "func"
+        func.mkdir(parents=True)
+        sidecar = func / "sub-01_task-rest_bold.json"
+        sidecar.write_text(
+            json.dumps(
+                {
+                    "Sources": ["shared.nii", "only-in-sources.nii"],
+                    "BasedOn": ["shared.nii", "only-in-basedon.nii"],
+                }
+            )
+        )
+
+        ds = BIDSDataset.from_path(ds_path)
+        migrate_dataset(ds)
+
+        data = json.loads(sidecar.read_text())
+        assert "BasedOn" not in data
+        assert isinstance(data["Sources"], list)
+        # No duplicates: 'shared.nii' appears exactly once
+        assert data["Sources"].count("shared.nii") == 1
+        assert set(data["Sources"]) == {
+            "shared.nii",
+            "only-in-sources.nii",
+            "only-in-basedon.nii",
+        }
+
 
 class TestEnumRename:
     @pytest.mark.ai_generated
@@ -998,6 +1061,34 @@ class TestDCOffsetCorrectionMigration:
         data = json.loads(sidecar.read_text())
         # Scope is iEEG only (FR-031) — func sidecars remain untouched
         assert data == {"DCOffsetCorrection": "none"}
+
+    @pytest.mark.ai_generated
+    def test_dcoffset_migration_is_idempotent(self, tmp_path: Path) -> None:
+        """Running migrate twice produces the same result as running it once.
+
+        After the first migration the original DCOffsetCorrection key is gone,
+        so a second run must be a no-op (no double-nesting, no error).
+        """
+        ds_path = _make_dataset(tmp_path, "1.4.0")
+        ieeg = ds_path / "sub-01" / "ieeg"
+        ieeg.mkdir(parents=True)
+        sidecar = ieeg / "sub-01_task-rest_ieeg.json"
+        sidecar.write_text(json.dumps({"DCOffsetCorrection": "high-pass 0.1Hz"}))
+
+        ds = BIDSDataset.from_path(ds_path)
+        migrate_dataset(ds, level="safe")
+        first_pass = json.loads(sidecar.read_text())
+        assert first_pass == {
+            "SoftwareFilters": {
+                "DCOffsetCorrection": {"description": "high-pass 0.1Hz"}
+            }
+        }
+
+        # Second run on the already-migrated dataset must be a no-op
+        ds2 = BIDSDataset.from_path(ds_path)
+        migrate_dataset(ds2, level="safe")
+        second_pass = json.loads(sidecar.read_text())
+        assert second_pass == first_pass
 
 
 class TestFieldRemoval:
