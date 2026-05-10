@@ -304,8 +304,8 @@ tests/
    - **Cross-file moves**: `ScanDate` → `acq_time` in `_scans.tsv`
    - **Conditional field rename**: `AcquisitionDuration` → `FrameAcquisitionDuration` (only when `VolumeTiming` present) (FR-026)
    - **TSV column value**: `"89+"` string → numeric `89` in `participants.tsv` `age` column, unit-aware (FR-027)
+   - **Structural field move**: `DCOffsetCorrection` → nested entry within `SoftwareFilters` dict (iEEG, FR-031). Lossless: value is preserved under `SoftwareFilters.DCOffsetCorrection.description`, original key is removed. Merges into pre-existing `SoftwareFilters` dict if present.
 5. Implement transformation handlers — **advisory level** (opt-in via `--level=advisory`):
-   - **Field removal**: `DCOffsetCorrection` deprecated in iEEG (FR-031)
    - **Field removal**: `HardcopyDeviceSoftwareVersion` deprecated in MRI (FR-032)
    - **HIPAA age cap**: numeric values > 89 → `89` in `age` column (rule id: `age_cap_89`)
    - **Conditional field rename (ambiguous)**: `AcquisitionDuration` without `VolumeTiming` — prompt user

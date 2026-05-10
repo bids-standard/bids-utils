@@ -19,7 +19,7 @@
 - [X] T002 Create `tox.ini` with envs: `py310`–`py314`, `lint`, `type`, `duplication`; configure `tox-gh-actions` mapping
 - [X] T003 [P] Set up GitHub Actions CI workflow (`.github/workflows/ci.yml`) — install `.[ci]`, run `tox`
 - [X] T004 [P] Create `src/bids_utils/__init__.py` with `__version__`
-- [X] T005 [P] Create `src/bids_utils/cli/__init__.py` with `click` group entry point (`bids-utils --help` works)
+- [X] T005 [P] Create `src/bids_utils/cli/__init__.py` with `click` group entry point (`bids-utils --help` works) (FR-002)
 - [X] T006 [P] Add `bids-examples` as a git submodule for testing
 - [X] T007 [P] Configure `mkdocs.yml` with basic documentation structure
 - [X] T008 [P] Set up intuit/auto for automated releases (`.autorc`, labels)
@@ -34,20 +34,20 @@
 
 **Purpose**: Shared utilities that ALL commands depend on. BLOCKS all user story work.
 
-- [X] T011 Implement `src/bids_utils/_types.py`: `Entity` (frozen dataclass: key+value), `BIDSPath` (entities dict, suffix, extension, datatype; `from_path()`, `to_filename()`, `to_relative_path()`, `with_entities()`, `with_suffix()`, `with_extension()`), `OperationResult`, `Change` dataclasses per data-model.md
+- [X] T011 Implement `src/bids_utils/_types.py`: `Entity` (frozen dataclass: key+value), `BIDSPath` (entities dict, suffix, extension, datatype; `from_path()`, `to_filename()`, `to_relative_path()`, `with_entities()`, `with_suffix()`, `with_extension()`), `OperationResult`, `Change` dataclasses per data-model.md (FR-001)
 - [X] T012 [P] Write tests for `_types.py` in `tests/test_types.py` — entity parsing, filename round-tripping, `BIDSPath.from_path()` with various BIDS filenames
 - [X] T123 [US1] Fix `BIDSPath.to_filename()` in `src/bids_utils/_types.py` to emit entities in schema-defined order (FR-035). When a `BIDSSchema` is available, `to_filename()` MUST reorder entities according to `BIDSSchema.entity_order()` before assembling the filename. Without a schema, preserve insertion order (best-effort). Add test in `tests/test_types.py`: `BIDSPath(entities={"sub":"01","task":"rest","run":"99","recording":"bipolar"}).to_filename(schema=...)` produces entities in schema order, not insertion order.
-- [X] T013 Implement `src/bids_utils/_dataset.py`: `BIDSDataset` dataclass (`root`, `bids_version`, `schema_version`, `vcs`), `BIDSDataset.from_path()` (walk up to find `dataset_description.json`), read `BIDSVersion`
+- [X] T013 Implement `src/bids_utils/_dataset.py`: `BIDSDataset` dataclass (`root`, `bids_version`, `schema_version`, `vcs`), `BIDSDataset.from_path()` (walk up to find `dataset_description.json`), read `BIDSVersion` (FR-010)
 - [X] T014 [P] Write tests for `_dataset.py` in `tests/test_dataset.py` — discovery from nested paths, missing `dataset_description.json`, version extraction
-- [X] T015 Implement `src/bids_utils/_schema.py`: `BIDSSchema` class wrapping `bidsschematools.schema.load_schema()` — load by version, `entity_order()`, `sidecar_extensions(suffix)`, `is_valid_entity()`, `deprecation_rules(from_ver, to_ver)`, `metadata_field_info()`
+- [X] T015 Implement `src/bids_utils/_schema.py`: `BIDSSchema` class wrapping `bidsschematools.schema.load_schema()` — load by version, `entity_order()`, `sidecar_extensions(suffix)`, `is_valid_entity()`, `deprecation_rules(from_ver, to_ver)`, `metadata_field_info()` (FR-009)
 - [X] T016 [P] Write tests for `_schema.py` in `tests/test_schema.py` — schema loading, entity queries, sidecar extension queries, deprecation rule extraction
-- [X] T017 Implement `src/bids_utils/_vcs.py`: `VCSBackend` protocol, `NoVCS`, `Git`, `GitAnnex`, `DataLad` implementations with `move()`, `remove()`, `is_dirty()`, `commit()`. Detection order: DataLad → GitAnnex → Git → NoVCS
+- [X] T017 Implement `src/bids_utils/_vcs.py`: `VCSBackend` protocol, `NoVCS`, `Git`, `GitAnnex`, `DataLad` implementations with `move()`, `remove()`, `is_dirty()`, `commit()`. Detection order: DataLad → GitAnnex → Git → NoVCS (FR-004)
 - [X] T018 [P] Write tests for `_vcs.py` in `tests/test_vcs.py` — detection logic, `git mv` integration, fallback to filesystem ops
-- [X] T019 Implement `src/bids_utils/_sidecars.py`: given a BIDS file path + schema, find all associated sidecars by replacing extension with each known sidecar extension
+- [X] T019 Implement `src/bids_utils/_sidecars.py`: given a BIDS file path + schema, find all associated sidecars by replacing extension with each known sidecar extension (FR-015)
 - [X] T020 [P] Write tests for `_sidecars.py` in `tests/test_sidecars.py` — sidecar discovery for `.nii.gz` with `.json`, `.bvec`, `.bval`; missing sidecars; inheritance-level sidecars
-- [X] T021 Implement `src/bids_utils/_scans.py`: read/write `_scans.tsv`, find scans file for a given file, update/remove entries by filename
+- [X] T021 Implement `src/bids_utils/_scans.py`: read/write `_scans.tsv`, find scans file for a given file, update/remove entries by filename (FR-005)
 - [X] T022 [P] Write tests for `_scans.py` in `tests/test_scans.py` — read/write round-trip, entry update, entry removal, missing `_scans.tsv`
-- [X] T023 Implement `src/bids_utils/_participants.py`: read/write `participants.tsv`, add/remove/rename subject entries
+- [X] T023 Implement `src/bids_utils/_participants.py`: read/write `participants.tsv`, add/remove/rename subject entries (FR-006)
 - [X] T024 [P] Write tests for `_participants.py` in `tests/test_participants.py` — CRUD operations, duplicate detection
 
 **Checkpoint**: All private infrastructure modules pass tests. No user-facing features yet.
@@ -91,7 +91,7 @@
 ### Implementation for User Story 1
 
 - [X] T025 [US1] Implement `src/bids_utils/rename.py`: `rename_file()` per library-api.md contract — parse source into `BIDSPath`, apply entity overrides, compute new filename, discover sidecars, check for conflicts, execute renames (filesystem or VCS), update `_scans.tsv`
-- [X] T026 [US1] Write tests for `rename.py` in `tests/test_rename.py`:
+- [X] T026 [US1] Write tests for `rename.py` in `tests/test_rename.py` (FR-011 conflict refusal):
   - Rename with entity override (`--set task=nback`) renames file + sidecars
   - `_scans.tsv` entry updated after rename
   - Conflict detection (target already exists → error)
@@ -99,7 +99,7 @@
   - Dry-run returns changes without modifying files
   - VCS (`git mv`) used when in git repo
 - [X] T027 [US1] Implement `src/bids_utils/cli/rename.py`: click command wiring `--set`, `--dry-run`, `--json`, `-v`/`-q`
-- [X] T028 [US1] Implement `src/bids_utils/cli/_common.py`: shared CLI decorators/options (`--dry-run`, `--json`, `-v`/`-q`, `--force`, `--include-sourcedata`, `--schema-version`)
+- [X] T028 [US1] Implement `src/bids_utils/cli/_common.py`: shared CLI decorators/options (`--dry-run`, `--json`, `-v`/`-q`, `--force`, `--include-sourcedata`, `--schema-version`) (FR-007 `--json`, FR-008 exit codes, FR-013 verbosity, FR-014 sourcedata)
 - [X] T029 [US1] Write CLI smoke tests in `tests/test_cli.py` — `bids-utils rename --help`, `bids-utils rename --dry-run` on a fixture dataset
 - [X] T030 [US1] Write `bids-examples` sweep test in `tests/integration/test_bids_examples.py` — rename a random file in each dataset, validate
 
@@ -115,13 +115,13 @@
 
 ### Implementation for User Story 2
 
-- [X] T031 [US2] Implement migration rule engine in `src/bids_utils/migrate.py`: `MigrationRule`, `MigrationPlan`, `MigrationFinding` dataclasses per data-model.md; migration registry (decorator-based, adapted from PR #2282 pattern); load deprecation rules from schema (`rules/checks/deprecations.yml`, `objects/metadata.yaml`, `objects/enums.yaml`)
-- [X] T032 [US2] Implement metadata field rename handler: `BasedOn` → `Sources`, `RawSources` → `Sources`. Merge logic MUST handle: (a) existing `Sources` as string + incoming value as array (normalize to array first), (b) both `BasedOn` AND `RawSources` present alongside existing `Sources` (3-way merge). Add tests for mixed-type merge and 3-way merge scenarios. (Note: `ScanDate` handled by T036; `DCOffsetCorrection` by T105; `AcquisitionDuration` by T104.) *(Reimplementation needed: current merge logic broken for mixed string/array types.)*
+- [X] T031 [US2] Implement migration rule engine in `src/bids_utils/migrate.py`: `MigrationRule`, `MigrationPlan`, `MigrationFinding` dataclasses per data-model.md; migration registry (decorator-based, adapted from PR #2282 pattern); load deprecation rules from schema (`rules/checks/deprecations.yml`, `objects/metadata.yaml`, `objects/enums.yaml`) (FR-016 schema-driven migration)
+- [X] T032 [US2] Implement metadata field rename handler: `BasedOn` → `Sources`, `RawSources` → `Sources`. Merge logic MUST handle: (a) existing `Sources` as string + incoming value as array (normalize to array first), (b) both `BasedOn` AND `RawSources` present alongside existing `Sources` (3-way merge). Add tests for mixed-type merge and 3-way merge scenarios. (Note: `ScanDate` handled by T036; `DCOffsetCorrection` by T105; `AcquisitionDuration` by T104.) *(Original implementation; merge logic for mixed string/array types is broken — bug fix tracked in T147.)*
 - [X] T033 [US2] Implement value format change handler: relative paths → BIDS URIs in `IntendedFor`, `AssociatedEmptyRoom`, `Sources`; `DatasetDOI` bare DOIs → URI format
 - [X] T034 [US2] Implement suffix deprecation handler: `_phase` → `_part-phase_bold`; deprecated anat suffixes `T2star`, `FLASH`, `PD` (delegates to `rename_file()`)
 - [X] T035 [US2] Implement enum value rename handler: `ElektaNeuromag` → `NeuromagElektaMEGIN`, deprecated template identifiers (`fsaverage3`–`fsaverage6`, `fsaveragesym`, versioned `UNCInfant*`)
-- [X] T036 [US2] Implement cross-file move handler: `ScanDate` from JSON sidecar → `acq_time` column in `_scans.tsv`. MUST create `_scans.tsv` with appropriate headers if it does not exist — current implementation silently skips the TSV write when the file is missing, causing data loss (`ScanDate` removed from JSON but never written to TSV). Add test for missing-`_scans.tsv` scenario. *(Reimplementation needed: data loss bug.)*
-- [X] T037 [US2] Implement `migrate_dataset()` orchestrator: determine dataset version, determine target version (default: current released 1.x), compute applicable rules between versions, scan dataset for findings, apply auto-fixable findings, report unfixable ones
+- [X] T036 [US2] Implement cross-file move handler: `ScanDate` from JSON sidecar → `acq_time` column in `_scans.tsv`. MUST create `_scans.tsv` with appropriate headers if it does not exist — current implementation silently skips the TSV write when the file is missing, causing data loss (`ScanDate` removed from JSON but never written to TSV). Add test for missing-`_scans.tsv` scenario. *(Original implementation; missing-`_scans.tsv` data-loss bug remains — bug fix tracked in T148.)*
+- [X] T037 [US2] Implement `migrate_dataset()` orchestrator: determine dataset version, determine target version (default: current released 1.x), compute applicable rules between versions, scan dataset for findings, apply auto-fixable findings, report unfixable ones (FR-017 `--to`, FR-018 cumulative migration)
 - [X] T038 [US2] Write tests for `migrate.py` in `tests/test_migrate.py`:
   - Metadata field renames applied correctly
   - Relative paths converted to BIDS URIs
@@ -158,7 +158,7 @@
 ### New 1.x migration rules
 
 - [X] T104 [US2] Register `AcquisitionDuration` → `FrameAcquisitionDuration` migration rule in `src/bids_utils/migrate.py` (FR-026). Level: `safe`. Condition: `VolumeTiming` must be present in the same sidecar JSON. Implement handler: scan BOLD/ASL sidecars, check condition, rename field. When `AcquisitionDuration` exists without `VolumeTiming`, register a separate finding as `non-auto-fixable` with clear reason.
-- [X] T105 [P] [US2] Register `DCOffsetCorrection` → `SoftwareFilters` structural migration rule in `src/bids_utils/migrate.py` (FR-031). Level: `safe`. Scope: iEEG sidecars. Handler: move `DCOffsetCorrection` value into `"SoftwareFilters": {"DCOffsetCorrection": {"description": VALUE}}`; merge into existing `SoftwareFilters` dict if present; remove original `DCOffsetCorrection` field. Add tests for: standalone DCOffsetCorrection, DCOffsetCorrection with pre-existing SoftwareFilters dict. *(Reimplementation needed: current code removes field instead of migrating to SoftwareFilters.)*
+- [X] T105 [P] [US2] Register `DCOffsetCorrection` → `SoftwareFilters` structural migration rule in `src/bids_utils/migrate.py` (FR-031). Level: `safe`. Scope: iEEG sidecars. Handler: move `DCOffsetCorrection` value into `"SoftwareFilters": {"DCOffsetCorrection": {"description": VALUE}}`; merge into existing `SoftwareFilters` dict if present; remove original `DCOffsetCorrection` field. Add tests for: standalone DCOffsetCorrection, DCOffsetCorrection with pre-existing SoftwareFilters dict. *(Original implementation; current code removes the field instead of migrating it to `SoftwareFilters` — bug fix tracked in T149.)*
 - [X] T106 [P] [US2] Register `HardcopyDeviceSoftwareVersion` field removal rule in `src/bids_utils/migrate.py` (FR-032). Level: `advisory`. Scope: MRI sidecars. Handler: remove the field. Warn about data loss.
 - [X] T107 [US2] Register age `"89+"` string → numeric `89` rule in `src/bids_utils/migrate.py` (FR-027). Level: `safe`. Handler: scan `participants.tsv` `age` column for `"89+"` string values. **Unit-aware**: read `participants.json` sidecar, check if `"Units"` is defined for `age`; if non-year units, skip with warning. Convert matched strings to numeric `89`.
 - [X] T108 [P] [US2] Register HIPAA age cap rule (id: `age_cap_89`) in `src/bids_utils/migrate.py` (FR-027). Level: `advisory`. Handler: scan `participants.tsv` `age` column for numeric values > 89, cap to `89`. Same unit-awareness as T107.
@@ -175,7 +175,7 @@
 - [X] T110 [US2] Write tests for new migration rules in `tests/test_migrate.py`:
   - `AcquisitionDuration` renamed to `FrameAcquisitionDuration` when `VolumeTiming` present
   - `AcquisitionDuration` flagged non-auto-fixable when `VolumeTiming` absent
-  - `DCOffsetCorrection` removed from iEEG sidecar at advisory level
+  - `DCOffsetCorrection` migrated into `SoftwareFilters` dict at safe level (FR-031): standalone field gets `SoftwareFilters: {DCOffsetCorrection: {description: VALUE}}`; if `SoftwareFilters` already exists, the new entry is merged into the existing dict, not overwritten
   - `HardcopyDeviceSoftwareVersion` removed at advisory level
   - `"89+"` string converted to numeric `89` in `participants.tsv`
   - Age with non-year units (`"Units": "months"` in `participants.json`) → rule skipped with warning
@@ -324,7 +324,7 @@
 
 ### Implementation
 
-- [X] T062 [US7] Implement `remove_subject()` in `src/bids_utils/subject.py`: delete directory tree, update `participants.tsv`, clean up `_scans.tsv`; require `--force` or prompt for confirmation
+- [X] T062 [US7] Implement `remove_subject()` in `src/bids_utils/subject.py`: delete directory tree, update `participants.tsv`, clean up `_scans.tsv`; require `--force` or prompt for confirmation (FR-012 `--force`)
 - [X] T063 [P] [US8] Implement `src/bids_utils/run.py`: `remove_run()` — delete run files + sidecars, optionally reindex subsequent runs (`--shift` / `--no-shift`), update `_scans.tsv`
 - [X] T064 [US7] Write tests for `remove_subject()` in `tests/test_subject.py`: subject removed, `participants.tsv` updated, `--force` bypasses prompt
 - [X] T065 [P] [US8] Write tests for `remove_run()` in `tests/test_run.py`: run removed, `--shift` reindexes, `--no-shift` leaves gap, `_scans.tsv` updated
@@ -487,6 +487,18 @@
 - [ ] T080 [P] Performance profiling on a 1000-subject synthetic dataset (SC-003)
 - [X] T081 Code cleanup: check for duplication (`tox -e duplication`), refactor
 - [X] T082 Run `quickstart.md` validation — verify all documented commands work
+
+---
+
+## Phase 3c: Migration Handler Bug Fixes (Audit Follow-up)
+
+**Purpose**: Three Phase 3 tasks (T032, T036, T105) shipped with `[X]` despite their own descriptions admitting unfinished bugs (analyzer findings I1, I2, 2026-05-09). Splitting the bug fixes out makes status honest and gives them their own coverage / acceptance criteria.
+
+- [ ] T147 [US2] Fix `Sources` merge logic in `src/bids_utils/migrate.py` (follow-up to T032). When the destination `Sources` field exists as a **string** and the incoming `BasedOn` / `RawSources` value is an **array** (or vice versa), the current handler raises or drops one side. Normalize both sides to a list before merging; preserve duplicate-removal semantics (FR-029). Add `tests/test_migrate.py` cases: (a) string + array merge, (b) array + string merge, (c) 3-way merge (`BasedOn` + `RawSources` + pre-existing `Sources`) with mixed types in any of the three.
+- [ ] T148 [US2] Fix `ScanDate` cross-file move in `src/bids_utils/migrate.py` (follow-up to T036). When `_scans.tsv` does not exist for the target session, the handler currently removes `ScanDate` from the JSON sidecar without writing the TSV — a data-loss bug. The fixed handler MUST create `_scans.tsv` with the canonical `filename\tacq_time` header (extending with extra columns is fine if needed) and write the row before clearing the JSON field. Add `tests/test_migrate.py` case for the missing-`_scans.tsv` path; assert the value lands in the new TSV.
+- [ ] T149 [US2] Fix `DCOffsetCorrection` → `SoftwareFilters` migration in `src/bids_utils/migrate.py` (follow-up to T105, FR-031). The current handler **removes** the field; the spec mandates a structural lossless move into `SoftwareFilters: {DCOffsetCorrection: {description: VALUE}}` at level `safe` (not `advisory`). Implement the move + merge-into-existing-dict semantics. Add `tests/test_migrate.py` cases: (a) standalone `DCOffsetCorrection` → expected nested dict, (b) `DCOffsetCorrection` alongside pre-existing `SoftwareFilters` → entry merged, no overwrite, (c) verify the original field is absent post-migration. Update T110's iEEG case (it now asserts safe-level structural migration, not advisory removal).
+
+**Checkpoint**: `tox -e py3 -- tests/test_migrate.py -k "merge_sources or scan_date_no_tsv or dcoffsetcorrection"` passes; the three known data-loss / data-corruption paths are covered.
 
 ---
 
