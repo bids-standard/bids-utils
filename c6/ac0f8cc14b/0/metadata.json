@@ -1,0 +1,41 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "c6ac0f8cc14b",
+  "session_id": "d1444e57-c35a-4eb8-a6bb-9f2ed759e12c",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-10T12:56:02.6331715Z",
+  "branch": "entire-bug-repro-16807",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".specify/specs/001-consistent-inout/contracts/io_contract.md",
+    ".specify/specs/001-consistent-inout/data-model.md",
+    ".specify/specs/001-consistent-inout/plan.md",
+    ".specify/specs/001-consistent-inout/quickstart.md",
+    ".specify/specs/001-consistent-inout/research.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-7[1m]",
+  "turn_id": "2e3b5dbc537b",
+  "token_usage": {
+    "input_tokens": 347,
+    "cache_creation_tokens": 3113083,
+    "cache_read_tokens": 37075560,
+    "output_tokens": 251217,
+    "api_call_count": 233
+  },
+  "session_metrics": {
+    "turn_count": 20
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-10T12:56:02.571123029Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 210,
+    "human_removed": 644,
+    "total_committed": 210,
+    "total_lines_changed": 854,
+    "agent_percentage": 0,
+    "metric_version": 2
+  }
+}
