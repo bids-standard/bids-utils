@@ -1,0 +1,27 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "4b7f5469f924",
+  "strategy": "manual-commit",
+  "branch": "000-initial-design",
+  "checkpoints_count": 3,
+  "files_touched": [
+    ".specify/specs/000-initial-design.md",
+    ".specify/specs/000-initial-design/plan.md",
+    ".specify/specs/000-initial-design/tasks.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/4b/7f5469f924/0/metadata.json",
+      "transcript": "/4b/7f5469f924/0/full.jsonl",
+      "content_hash": "/4b/7f5469f924/0/content_hash.txt",
+      "prompt": "/4b/7f5469f924/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 293,
+    "cache_creation_tokens": 1168147,
+    "cache_read_tokens": 28431711,
+    "output_tokens": 126238,
+    "api_call_count": 173
+  }
+}
