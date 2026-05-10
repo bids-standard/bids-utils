@@ -1,0 +1,93 @@
+/speckit.plan
+
+---
+
+why CLAUDE.md symlink was replaced?  I am fixing that -- must be a symlink to DEVELOPMENT.md - if need to change -- modify that one.   I see "`python-json-source-map` / `jsonpreserve` / `cson`-style libraries" and that rejected as overkill. Overall -- if there is an actively maintained library without heavy dependencies which could assist here , e.g. in case of json in particular, I would prefer to go with it.  Please provide detailed research and consideration here across those or any other library which could be of assistance.
+
+---
+
+give me links (github or other source repo) for those license rejected
+
+---
+
+if any information is incorrect -- go ahead and fix. but also extend with pointers and potentially example testing of the libraries as toward the goal -- the preservation of formatting.  Create a tricky case and see how they do.  ATM from https://github.com/nineteendo/jsonyx I do not see if format preservation is the feature/goal there
+
+---
+
+what's url for json-five? please review it for the sake of having unittests. Then prepare a small script script to do full reproducible (use uv to setup env) round-trip across all .json files in bids-examples following our https://stamped-principles.github.io/stamped-examples/examples/ephemeral-shell-reproducer/
+
+---
+
+run the .specify/specs/001-consistent-inout/round_trip_repro.sh and provide me with a summary
+
+---
+
+before we proceed anywhere, 1. provide minimal bug report demonstrator of the bug discovered; 2. in this round_trip_repro.sh -- add a test (after ensuring simple round trip) on editing some simple field (e.g. a string) and observing preservation of indentation and overall structure -- only that field entry should change.  Then also add addition of a new field and see if it indents consistently.
+
+---
+
+please prepare the issue to file for the manipulation of keys, also check on del (removal) on either it works as it should on a dict  and potentially other operations
+
+---
+
+what should be next?
+
+---
+
+no -- let's do it now so we know what to avoid etc
+
+---
+
+proceed with /speckit.tasks
+
+---
+
+/speckit.plan proceed to use json-five for format preserving json manipulations but do it via our layer of adapter so later we could potentially change to another solution if needed.
+
+---
+
+/speckit-tasks
+
+---
+
+/speckit-implement
+
+---
+
+/speckit-implement
+
+---
+
+senior engineer review the proposal of this round
+
+---
+
+we indeed must address those priority fixes!  since bids_examples is a git (or git/git-annex) dataset -- do not even use shutil.copytree!!! use 'git worktree' for the fastest way to get a worktree specific to the test -- name branch reflective of the test name ... if already exists, delete branch first I guess (analyze if ok). Since it would be a git worktree -- if git-annex, it must gain access to original .git/annex/objects and all should work without any further step!
+
+as for errors -- we must not swallow errors indeed!   
+
+I am not clear on drift on TSV -- please elaborate first . Nits - indeed for the next round
+
+---
+
+there is lots of staged changes. Review/ commit , potentially splitting changes to spec from code changes and otherwise making atomic commits
+
+---
+
+ok, I have upgraded entire -- please try again and let's see if may be this interfering behavior no longer comes up
+
+---
+
+could you please show steps you are doing and effects of them so I could report issue to entire cli?
+
+---
+
+so there is no bug now and no issue to file  for entire?  and yes -- proceed with changes you were doing
+
+---
+
+again -- sounds like there is still bug in entire which interfers with our ability to commit. Can you formulate first really succinctly the issue and brief demo?
+
+---
+
+go ahead
