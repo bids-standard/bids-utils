@@ -1,0 +1,78 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "73ce9c97b3ab",
+  "session_id": "d1444e57-c35a-4eb8-a6bb-9f2ed759e12c",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-10T12:55:26.543006753Z",
+  "branch": "entire-bug-2-repro-16698",
+  "checkpoints_count": 3,
+  "files_touched": [
+    ".specify/specs/001-consistent-inout/contracts/io_contract.md",
+    ".specify/specs/001-consistent-inout/data-model.md",
+    ".specify/specs/001-consistent-inout/json_five_keys_manipulation_bug.py",
+    ".specify/specs/001-consistent-inout/json_five_manipulation_probe.py",
+    ".specify/specs/001-consistent-inout/json_five_modeldumper_state_bug.py",
+    ".specify/specs/001-consistent-inout/json_five_modeldumper_state_bug_minimal.py",
+    ".specify/specs/001-consistent-inout/json_five_modeldumper_state_bug_minimal2.py",
+    ".specify/specs/001-consistent-inout/json_five_modeldumper_state_bug_minimal3.py",
+    ".specify/specs/001-consistent-inout/library-survey.md",
+    ".specify/specs/001-consistent-inout/plan.md",
+    ".specify/specs/001-consistent-inout/quickstart.md",
+    ".specify/specs/001-consistent-inout/research.md",
+    ".specify/specs/001-consistent-inout/round_trip_repro.sh"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-7[1m]",
+  "turn_id": "2e3b5dbc537b",
+  "token_usage": {
+    "input_tokens": 346,
+    "cache_creation_tokens": 3112745,
+    "cache_read_tokens": 36747372,
+    "output_tokens": 249182,
+    "api_call_count": 232
+  },
+  "session_metrics": {
+    "turn_count": 20
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-10T12:55:26.490452365Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 210,
+    "human_removed": 644,
+    "total_committed": 210,
+    "total_lines_changed": 854,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 19,
+      "user_lines_removed": 0,
+      "agent_lines_added": 3380,
+      "agent_lines_removed": 210,
+      "user_added_per_file": {
+        ".git-meta/COMMIT_MSG": 19
+      }
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 19,
+      "user_lines_removed": 0,
+      "agent_lines_added": 3380,
+      "agent_lines_removed": 210,
+      "user_added_per_file": {
+        ".git-meta/COMMIT_MSG": 19
+      }
+    }
+  ]
+}

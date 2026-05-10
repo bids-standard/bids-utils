@@ -1,0 +1,37 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "73ce9c97b3ab",
+  "strategy": "manual-commit",
+  "branch": "entire-bug-2-repro-16698",
+  "checkpoints_count": 3,
+  "files_touched": [
+    ".specify/specs/001-consistent-inout/contracts/io_contract.md",
+    ".specify/specs/001-consistent-inout/data-model.md",
+    ".specify/specs/001-consistent-inout/json_five_keys_manipulation_bug.py",
+    ".specify/specs/001-consistent-inout/json_five_manipulation_probe.py",
+    ".specify/specs/001-consistent-inout/json_five_modeldumper_state_bug.py",
+    ".specify/specs/001-consistent-inout/json_five_modeldumper_state_bug_minimal.py",
+    ".specify/specs/001-consistent-inout/json_five_modeldumper_state_bug_minimal2.py",
+    ".specify/specs/001-consistent-inout/json_five_modeldumper_state_bug_minimal3.py",
+    ".specify/specs/001-consistent-inout/library-survey.md",
+    ".specify/specs/001-consistent-inout/plan.md",
+    ".specify/specs/001-consistent-inout/quickstart.md",
+    ".specify/specs/001-consistent-inout/research.md",
+    ".specify/specs/001-consistent-inout/round_trip_repro.sh"
+  ],
+  "sessions": [
+    {
+      "metadata": "/73/ce9c97b3ab/0/metadata.json",
+      "transcript": "/73/ce9c97b3ab/0/full.jsonl",
+      "content_hash": "/73/ce9c97b3ab/0/content_hash.txt",
+      "prompt": "/73/ce9c97b3ab/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 346,
+    "cache_creation_tokens": 3112745,
+    "cache_read_tokens": 36747372,
+    "output_tokens": 249182,
+    "api_call_count": 232
+  }
+}
