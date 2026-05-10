@@ -1,0 +1,29 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "4da203d6d659",
+  "strategy": "manual-commit",
+  "branch": "entire-bug-repro-16807",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".specify/specs/001-consistent-inout/contracts/io_contract.md",
+    ".specify/specs/001-consistent-inout/data-model.md",
+    ".specify/specs/001-consistent-inout/plan.md",
+    ".specify/specs/001-consistent-inout/quickstart.md",
+    ".specify/specs/001-consistent-inout/research.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/4d/a203d6d659/0/metadata.json",
+      "transcript": "/4d/a203d6d659/0/full.jsonl",
+      "content_hash": "/4d/a203d6d659/0/content_hash.txt",
+      "prompt": "/4d/a203d6d659/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 347,
+    "cache_creation_tokens": 3113083,
+    "cache_read_tokens": 37075560,
+    "output_tokens": 251217,
+    "api_call_count": 233
+  }
+}
