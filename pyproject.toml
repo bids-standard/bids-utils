@@ -29,6 +29,10 @@ classifiers = [
 dependencies = [
     "bidsschematools>=1.0.0",
     "click>=8.0",
+    # json-five (PyPI dist; import name `json5`) backs format-preserving
+    # JSON I/O. Imports are isolated to bids_utils._format._json_backend;
+    # see .specify/specs/001-consistent-inout/plan.md.
+    "json-five>=1.1.2,<2",
     "packaging>=21.0",
 ]
 

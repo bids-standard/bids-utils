@@ -33,10 +33,10 @@ top of its phase.
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 Create the `src/bids_utils/_format/` package skeleton: empty `__init__.py`, `_profile.py`, `_write.py`, `_json.py`, `_json_backend.py`, `_tsv.py`, `_text.py`. Each file gets a one-line module docstring referencing `.specify/specs/001-consistent-inout/contracts/io_contract.md`. Empty for now — populated per phase below.
-- [ ] T002 Add `json-five>=1.1.2,<2` to `[project] dependencies` in `pyproject.toml` (alongside `bidsschematools`, `click`, `packaging`). The PyPI distribution name is `json-five`; the import name is `json5`. Document in the `[project]` section comment that this dep is isolated to `bids_utils._format._json_backend`.
-- [ ] T003 [P] Add a `bids_examples_copy` pytest fixture to `tests/conftest.py` that yields a temp-copy `Path` of one configurable bids-examples dataset, so integration tests can mutate without dirtying the submodule. Honors `BIDS_EXAMPLES_DATASET` env var (default `ds001`).
-- [ ] T004 [P] Register the `pytest.mark.integration` marker in `pyproject.toml` `[tool.pytest.ini_options].markers` if not already present, so the integration sweep can be selected via `-m integration`. Also confirm `pytest.mark.ai_generated` is registered (per `~/.claude/CLAUDE.md`). (Markers were already registered; verified.)
+- [X] T001 Create the `src/bids_utils/_format/` package skeleton: empty `__init__.py`, `_profile.py`, `_write.py`, `_json.py`, `_json_backend.py`, `_tsv.py`, `_text.py`. Each file gets a one-line module docstring referencing `.specify/specs/001-consistent-inout/contracts/io_contract.md`. Empty for now — populated per phase below.
+- [X] T002 Add `json-five>=1.1.2,<2` to `[project] dependencies` in `pyproject.toml` (alongside `bidsschematools`, `click`, `packaging`). The PyPI distribution name is `json-five`; the import name is `json5`. Document in the `[project]` section comment that this dep is isolated to `bids_utils._format._json_backend`.
+- [X] T003 [P] Add a `bids_examples_copy` pytest fixture to `tests/conftest.py` that yields a temp-copy `Path` of one configurable bids-examples dataset, so integration tests can mutate without dirtying the submodule. Honors `BIDS_EXAMPLES_DATASET` env var (default `ds001`).
+- [X] T004 [P] Register the `pytest.mark.integration` marker in `pyproject.toml` `[tool.pytest.ini_options].markers` if not already present, so the integration sweep can be selected via `-m integration`. Also confirm `pytest.mark.ai_generated` is registered (per `~/.claude/CLAUDE.md`). (Markers were already registered; verified.)
 
 ---
 
@@ -47,15 +47,15 @@ package re-exports. These are imported by every story.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T005 [P] Define `FormattingProfile` (frozen dataclass: `indent: str`, `separators: tuple[str, str]`, `line_ending: str`, `trailing_newline: bool`, `bom: bool`) in `src/bids_utils/_format/_profile.py` per contract Part A
-- [ ] T006 [P] Define `TSVFormattingProfile` (frozen dataclass: `fieldnames: tuple[str, ...]`, `line_ending`, `trailing_newline`, `bom`, `original_lines: tuple[bytes, ...]`, `quoting: int`) in `src/bids_utils/_format/_profile.py` per contract Part A
-- [ ] T007 [P] Define `TextFormattingProfile` (frozen dataclass: `line_ending`, `trailing_newline`, `bom`) in `src/bids_utils/_format/_profile.py` per contract Part A
-- [ ] T008 Define module constants `DEFAULT_JSON_PROFILE`, `DEFAULT_TSV_PROFILE`, `DEFAULT_TEXT_PROFILE` in `src/bids_utils/_format/_profile.py` per research R9 / FR-006 (2-space indent for JSON, LF, trailing newline, no BOM, `(",", ": ")` separators). Depends on T005–T007.
-- [ ] T009 Implement `write_if_changed(path: Path, new_bytes: bytes) -> bool` in `src/bids_utils/_format/_write.py` per contract A and research R6 (single byte read + compare; create parent dirs only on first write; idempotent on identical bytes). Depends on T005.
-- [ ] T010 Populate `src/bids_utils/_format/__init__.py` to re-export the public-internal surface: `FormattingProfile`, `TSVFormattingProfile`, `TextFormattingProfile`, the three `DEFAULT_*_PROFILE` constants, `write_if_changed` (more added per phase). Depends on T005–T009.
-- [ ] T011 [P] Create `tests/test_format.py` with `test_signatures_present` asserting all dataclass fields, default constants, and module-level re-exports exist as documented in contract Part A. Currently fails (modules empty); becomes the contract pin.
-- [ ] T012 [P] In `tests/test_format.py` add `test_default_profile_for_new_file` asserting `DEFAULT_JSON_PROFILE.indent == "  "`, `line_ending == "\n"`, `trailing_newline is True`, `bom is False`, `separators == (",", ": ")` (FR-006 / B.4).
-- [ ] T013 [P] In `tests/test_format.py` add `test_write_if_changed_skips_identical_bytes` (write→write same bytes → second call returns False, mtime unchanged) and `test_write_if_changed_writes_when_different` (FR-007 / SC-001 unit-level).
+- [X] T005 [P] Define `FormattingProfile` (frozen dataclass: `indent: str`, `separators: tuple[str, str]`, `line_ending: str`, `trailing_newline: bool`, `bom: bool`) in `src/bids_utils/_format/_profile.py` per contract Part A
+- [X] T006 [P] Define `TSVFormattingProfile` (frozen dataclass: `fieldnames: tuple[str, ...]`, `line_ending`, `trailing_newline`, `bom`, `original_lines: tuple[bytes, ...]`, `quoting: int`) in `src/bids_utils/_format/_profile.py` per contract Part A
+- [X] T007 [P] Define `TextFormattingProfile` (frozen dataclass: `line_ending`, `trailing_newline`, `bom`) in `src/bids_utils/_format/_profile.py` per contract Part A
+- [X] T008 Define module constants `DEFAULT_JSON_PROFILE`, `DEFAULT_TSV_PROFILE`, `DEFAULT_TEXT_PROFILE` in `src/bids_utils/_format/_profile.py` per research R9 / FR-006 (2-space indent for JSON, LF, trailing newline, no BOM, `(",", ": ")` separators). Depends on T005–T007.
+- [X] T009 Implement `write_if_changed(path: Path, new_bytes: bytes) -> bool` in `src/bids_utils/_format/_write.py` per contract A and research R6 (single byte read + compare; create parent dirs only on first write; idempotent on identical bytes). Depends on T005.
+- [X] T010 Populate `src/bids_utils/_format/__init__.py` to re-export the public-internal surface: `FormattingProfile`, `TSVFormattingProfile`, `TextFormattingProfile`, the three `DEFAULT_*_PROFILE` constants, `write_if_changed` (more added per phase). Depends on T005–T009.
+- [X] T011 [P] Create `tests/test_format.py` with `test_signatures_present` asserting all dataclass fields, default constants, and module-level re-exports exist as documented in contract Part A. Currently fails (modules empty); becomes the contract pin.
+- [X] T012 [P] In `tests/test_format.py` add `test_default_profile_for_new_file` asserting `DEFAULT_JSON_PROFILE.indent == "  "`, `line_ending == "\n"`, `trailing_newline is True`, `bom is False`, `separators == (",", ": ")` (FR-006 / B.4).
+- [X] T013 [P] In `tests/test_format.py` add `test_write_if_changed_skips_identical_bytes` (write→write same bytes → second call returns False, mtime unchanged) and `test_write_if_changed_writes_when_different` (FR-007 / SC-001 unit-level).
 
 **Checkpoint**: Foundation ready — package laid out, dataclasses + defaults + `write_if_changed` work; user-story phases can begin.
 
