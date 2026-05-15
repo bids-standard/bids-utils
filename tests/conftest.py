@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import shutil
 import subprocess
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -141,6 +144,116 @@ def bids_examples_path() -> Path:
     if not _has_bids_examples():
         pytest.skip("bids-examples submodule not available")
     return BIDS_EXAMPLES_DIR
+
+
+_BRANCH_SAFE_RE = re.compile(r"[^a-zA-Z0-9._/-]+")
+
+
+def _branch_safe(name: str) -> str:
+    """Sanitize a string for use as a git branch component.
+
+    Git branch names disallow ``[``, ``]``, ``~``, ``^``, ``:``, ``?``,
+    ``*``, ``\\``, whitespace, control chars, and ``..``. Replace
+    runs of disallowed characters with ``-`` and strip leading/trailing
+    separators.
+    """
+    return _BRANCH_SAFE_RE.sub("-", name).strip("-/") or "anon"
+
+
+@pytest.fixture
+def bids_examples_copy(
+    tmp_path: Path,
+    request: pytest.FixtureRequest,
+) -> Iterator[Path]:
+    """Yield a fresh git worktree of one bids-examples dataset.
+
+    Uses ``git worktree add`` (not ``shutil.copytree``) because
+    bids-examples is a git/git-annex repository. The worktree shares
+    ``.git/objects`` and ``.git/annex/objects`` with the source repo,
+    so annex symlinks (when present) resolve without an extra step.
+
+    Branch name reflects the test name; if it already exists from a
+    prior crashed run, any associated worktree is removed and the
+    branch is force-deleted before recreating. This is safe because
+    the branch is throwaway test state, not real work.
+
+    The dataset name is taken from ``BIDS_EXAMPLES_DATASET`` (default
+    ``ds001``). Skips if bids-examples is absent, not a git repository,
+    or the named dataset is missing.
+    """
+    if not _has_bids_examples():
+        pytest.skip("bids-examples submodule not available")
+    if not (BIDS_EXAMPLES_DIR / ".git").exists():
+        pytest.skip(
+            "bids-examples is not a git repository (worktree fixture requires git)"
+        )
+
+    name = os.environ.get("BIDS_EXAMPLES_DATASET", "ds001")
+    if not (BIDS_EXAMPLES_DIR / name).is_dir():
+        pytest.skip(f"bids-examples dataset {name!r} not present")
+
+    branch = f"tests/bids-examples-copy/{_branch_safe(request.node.name)}"
+    wt_root = tmp_path / "bids-examples-wt"
+
+    # Remove any stale worktree previously registered for this branch.
+    # Per project policy we NEVER run `git worktree prune`; we only
+    # remove worktrees we know we created.
+    list_proc = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"],
+        cwd=BIDS_EXAMPLES_DIR,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    for block in list_proc.stdout.split("\n\n"):
+        if f"branch refs/heads/{branch}" not in block:
+            continue
+        for line in block.splitlines():
+            if line.startswith("worktree "):
+                stale = line[len("worktree "):]
+                subprocess.run(
+                    ["git", "worktree", "remove", "--force", stale],
+                    cwd=BIDS_EXAMPLES_DIR,
+                    capture_output=True,
+                    check=False,
+                )
+
+    # Force-delete the branch if it lingers (no-op if absent).
+    subprocess.run(
+        ["git", "branch", "-D", branch],
+        cwd=BIDS_EXAMPLES_DIR,
+        capture_output=True,
+        check=False,
+    )
+
+    # Create the worktree at a fresh path under tmp_path.
+    subprocess.run(
+        ["git", "worktree", "add", "-b", branch, str(wt_root), "HEAD"],
+        cwd=BIDS_EXAMPLES_DIR,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    try:
+        yield wt_root / name
+    finally:
+        # Teardown: remove the worktree we created (allowed per CLAUDE.md
+        # because we created it in this session) and delete the branch.
+        # Do this BEFORE pytest's tmp_path cleanup so no stale registry
+        # entry is left behind.
+        subprocess.run(
+            ["git", "worktree", "remove", "--force", str(wt_root)],
+            cwd=BIDS_EXAMPLES_DIR,
+            capture_output=True,
+            check=False,
+        )
+        subprocess.run(
+            ["git", "branch", "-D", branch],
+            cwd=BIDS_EXAMPLES_DIR,
+            capture_output=True,
+            check=False,
+        )
 
 
 @pytest.fixture
