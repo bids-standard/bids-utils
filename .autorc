@@ -1,6 +1,18 @@
 {
-  "plugins": ["git-tag", "conventional-commits"],
-  "owner": "bids-standard",
-  "repo": "bids-utils",
-  "name": "bids-utils"
+    "baseBranch": "main",
+    "author": "auto <auto@nil>",
+    "noVersionPrefix": false,
+    "owner": "bids-standard",
+    "repo": "bids-utils",
+    "name": "bids-utils",
+    "plugins": [
+        "git-tag",
+        [
+            "exec",
+            {
+                "afterRelease": "python -m build && twine upload dist/*"
+            }
+        ],
+        "released"
+    ]
 }
