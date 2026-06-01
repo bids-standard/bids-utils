@@ -89,3 +89,7 @@ yes
 ---
 
 how with intuit auto to cut first release? shouldn't we do first one manually? then better prepare initial CHANGELOG.md with an entry for 0.1.0 which would VERY briefly summarize current state. We will upload this to pypi
+
+---
+
+add basic RELEASING.md but also add to CONTRIBUTING.md on use of auto and its labeling system!  then commit it all
