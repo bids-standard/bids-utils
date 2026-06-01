@@ -1,0 +1,27 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "da458a8b8922",
+  "strategy": "manual-commit",
+  "branch": "enh-auto-release",
+  "checkpoints_count": 2,
+  "files_touched": [
+    ".autorc",
+    ".github/workflows/release.yml",
+    "CHANGELOG.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/da/458a8b8922/0/metadata.json",
+      "transcript": "/da/458a8b8922/0/full.jsonl",
+      "content_hash": "/da/458a8b8922/0/content_hash.txt",
+      "prompt": "/da/458a8b8922/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 526,
+    "cache_creation_tokens": 2392752,
+    "cache_read_tokens": 46876538,
+    "output_tokens": 189786,
+    "api_call_count": 239
+  }
+}
