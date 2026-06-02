@@ -1,3 +1,15 @@
+# v0.1.1 (Tue Jun 02 2026)
+
+#### 📝 Documentation
+
+- Remove completed initial release steps [#17](https://github.com/bids-standard/bids-utils/pull/17) ([@yarikoptic](https://github.com/yarikoptic))
+
+#### Authors: 1
+
+- Yaroslav Halchenko ([@yarikoptic](https://github.com/yarikoptic))
+
+---
+
 # v0.1.0 (Mon Jun 01 2026)
 
 Initial public alpha release of `bids-utils` — a Python library and CLI for
