@@ -13,7 +13,12 @@ from typing import Any, Literal
 
 from bids_utils._dataset import BIDSDataset
 from bids_utils._io import read_json, write_json
-from bids_utils._types import AnnexedMode, Change, OperationResult
+from bids_utils._types import (
+    AnnexedMode,
+    Change,
+    OperationResult,
+    iter_dataset_paths,
+)
 from bids_utils._vcs import VCSBackend
 
 
@@ -30,8 +35,9 @@ def _find_json_sidecars(root: Path, scope: Path | None = None) -> list[Path]:
     search = scope or root
     return sorted(
         f
-        for f in search.rglob("*.json")
+        for f in iter_dataset_paths(search, "*.json")
         if f.name != "dataset_description.json"
+        # scope may itself lie under a dotdir of root
         and not any(p.startswith(".") for p in f.relative_to(root).parts)
     )
 
@@ -208,7 +214,7 @@ def segregate_metadata(
     # Find all data files (non-JSON, non-TSV)
     data_files = sorted(
         f
-        for f in search.rglob("*")
+        for f in iter_dataset_paths(search)
         if f.is_file()
         and f.suffix in (".gz", "")
         and not f.name.endswith(".json")

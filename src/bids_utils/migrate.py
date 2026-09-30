@@ -18,7 +18,13 @@ from bids_utils._io import read_json as _read_json
 from bids_utils._io import write_json as _write_json
 from bids_utils._participants import read_participants_tsv, write_participants_tsv
 from bids_utils._scans import find_scans_tsv, read_scans_tsv, write_scans_tsv
-from bids_utils._types import AnnexedMode, BIDSPath, Change, _is_bids_data_entry
+from bids_utils._types import (
+    AnnexedMode,
+    BIDSPath,
+    Change,
+    _is_bids_data_entry,
+    iter_dataset_paths,
+)
 from bids_utils._vcs import VCSBackend
 
 # ---------------------------------------------------------------------------
@@ -466,13 +472,7 @@ def _read_json_safe(
 
 def _scan_json_files(dataset_root: Path) -> list[Path]:
     """Find all JSON sidecar files in the dataset (skips dotdirs)."""
-    results: list[Path] = []
-    for p in sorted(dataset_root.rglob("*.json")):
-        rel = p.relative_to(dataset_root)
-        if rel.parts and rel.parts[0].startswith("."):
-            continue
-        results.append(p)
-    return results
+    return sorted(iter_dataset_paths(dataset_root, "*.json"))
 
 
 def _scan_for_field_rename(
@@ -634,16 +634,12 @@ def _scan_for_doi_format(
 def _scan_bids_files(dataset_root: Path) -> list[Path]:
     """Find all BIDS data files (non-JSON, non-TSV) in the dataset."""
     results: list[Path] = []
-    for p in sorted(dataset_root.rglob("*")):
+    for p in sorted(iter_dataset_paths(dataset_root)):
         if not _is_bids_data_entry(p):
             continue
         # Skip non-BIDS directories
-        rel = p.relative_to(dataset_root)
-        parts = rel.parts
-        if parts and (
-            parts[0].startswith(".")  # dotdirs: .git, .datalad, etc.
-            or parts[0] in ("derivatives", "sourcedata", "code")
-        ):
+        parts = p.relative_to(dataset_root).parts
+        if parts and parts[0] in ("derivatives", "sourcedata", "code"):
             continue
         # Skip JSON sidecars, TSV files, and dataset_description
         if p.suffix in (".json", ".tsv"):

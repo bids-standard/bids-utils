@@ -6,7 +6,12 @@ import shutil
 from pathlib import Path
 
 from bids_utils._dataset import BIDSDataset
-from bids_utils._types import Change, OperationResult, _is_bids_data_entry
+from bids_utils._types import (
+    Change,
+    OperationResult,
+    _is_bids_data_entry,
+    iter_dataset_paths,
+)
 
 
 def split_dataset(
@@ -54,7 +59,7 @@ def split_dataset(
             shutil.copy2(desc, output_path / "dataset_description.json")
 
     # Walk through all files
-    for f in sorted(dataset.root.rglob("*")):
+    for f in sorted(iter_dataset_paths(dataset.root)):
         if not _is_bids_data_entry(f):
             continue
         if f.name == "dataset_description.json":

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import warnings
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -14,6 +15,7 @@ from bids_utils._io import (
     ensure_writable,
     mark_modified,
     read_json,
+    update_json_references,
     write_json,
 )
 from bids_utils._types import AnnexedMode, ContentNotAvailableError
@@ -174,3 +176,34 @@ class TestWriteJson:
         write_json(link, {"new": "data"}, vcs)
         vcs.unlock.assert_called_once_with([link])
         vcs.add.assert_called_once()
+
+
+@pytest.mark.ai_generated
+def test_update_json_references_skips_vanishing_git_objects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Background ``git gc`` removing ``.git/objects/NN`` must not break it."""
+    (tmp_path / ".git" / "objects" / "03").mkdir(parents=True)
+    fmap = tmp_path / "sub-01" / "fmap"
+    fmap.mkdir(parents=True)
+    sidecar = fmap / "sub-01_phasediff.json"
+    sidecar.write_text(json.dumps({"IntendedFor": ["func/sub-01_run-1_bold.nii.gz"]}))
+
+    scanned_git: list[Path] = []
+    real_scandir = os.scandir
+
+    def gc_race(path):  # type: ignore[no-untyped-def]
+        if ".git" in Path(path).parts:
+            scanned_git.append(Path(path))
+            raise FileNotFoundError(path)
+        return real_scandir(path)
+
+    monkeypatch.setattr(os, "scandir", gc_race)
+    modified = update_json_references(
+        tmp_path, "sub-01_run-1_bold", "sub-01_run-99_bold"
+    )
+    assert scanned_git == []
+    assert modified == [sidecar]
+    assert json.loads(sidecar.read_text())["IntendedFor"] == [
+        "func/sub-01_run-99_bold.nii.gz"
+    ]

@@ -506,10 +506,10 @@
 
 **Purpose**: Fix CI flake from dataset-wide scans walking `.git` during background `git gc` (spec BUG 2026-08-20); consolidate dataset-root traversal into one pruning walker.
 
-- [ ] T150 [P] Regression tests first: `TestIterDatasetPaths` (`tests/test_types.py`) and `test_update_json_references_skips_vanishing_git_objects` (`tests/test_io.py`), injecting faults by monkeypatching `os.scandir`.
-- [ ] T151 Implement `iter_dataset_paths(root, pattern="*")` in `src/bids_utils/_types.py`.
-- [ ] T152 Replace dataset-root `rglob` in `update_json_references()` (`_io.py`), `_scan_json_files()` / `_scan_bids_files()` (`migrate.py`), `split_dataset()` (`split.py`), and `_find_json_sidecars()` / `segregate_metadata()` data-file discovery (`metadata.py`) with `iter_dataset_paths()`; drop the now-redundant post-hoc dotdir filters.
-- [ ] T153 Set `gc.auto=0` in the annexed bids-examples fixture (`tests/integration/_worktree_fixture.py::_make_annexed`) so no detached `git gc` mutates test repositories during tests or `tmp_path` cleanup.
+- [X] T150 [P] Regression tests first: `TestIterDatasetPaths` (`tests/test_types.py`) and `test_update_json_references_skips_vanishing_git_objects` (`tests/test_io.py`), injecting faults by monkeypatching `os.scandir`.
+- [X] T151 Implement `iter_dataset_paths(root, pattern="*")` in `src/bids_utils/_types.py`.
+- [X] T152 Replace dataset-root `rglob` in `update_json_references()` (`_io.py`), `_scan_json_files()` / `_scan_bids_files()` (`migrate.py`), `split_dataset()` (`split.py`), and `_find_json_sidecars()` / `segregate_metadata()` data-file discovery (`metadata.py`) with `iter_dataset_paths()`; drop the now-redundant post-hoc dotdir filters.
+- [X] T153 Set `gc.auto=0` in the annexed bids-examples fixture (`tests/integration/_worktree_fixture.py::_make_annexed`) so no detached `git gc` mutates test repositories during tests or `tmp_path` cleanup.
 
 **Checkpoint**: `tox` passes; the `tests/test_io.py` regression test fails against the pre-fix `rglob` code (py3.11/3.12/3.14).
 

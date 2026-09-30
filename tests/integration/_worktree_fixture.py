@@ -115,6 +115,8 @@ def _make_annexed(tmp_path: Path, dataset_id: str) -> Path:
     _git(dst, "init")
     _git(dst, "config", "user.email", "test@bids-utils.invalid")
     _git(dst, "config", "user.name", "bids-utils tests")
+    # no detached git gc mutating .git during tests (FR-044)
+    _git(dst, "config", "gc.auto", "0")
     _git(dst, "annex", "init", "test")
     _git(dst, "config", "annex.largefiles", "anything")
     _git(dst, "annex", "add", ".")

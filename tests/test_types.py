@@ -1,5 +1,6 @@
 """Tests for _types.py — Entity, BIDSPath, Change, OperationResult."""
 
+import os
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ from bids_utils._types import (
     Entity,
     OperationResult,
     _is_bids_data_entry,
+    iter_dataset_paths,
 )
 
 
@@ -221,6 +223,95 @@ class TestIsBidsDataEntry:
         renamed = ds_root / "sub-02" / "meg" / "sub-02_task-rest_meg.ds"
         assert renamed.is_dir()
         assert (renamed / "inner.bin").exists()
+
+
+def _make_tree_with_dotdirs(root: Path) -> None:
+    """Dataset-like tree with VCS/tool dotdirs that must never be walked."""
+    (root / "dataset_description.json").write_text("{}")
+    func = root / "sub-01" / "func"
+    func.mkdir(parents=True)
+    (func / "sub-01_task-rest_bold.json").write_text("{}")
+    (func / "sub-01_task-rest_bold.nii.gz").write_bytes(b"")
+    for dot in (".git/objects/aa", ".git/annex/objects/xy", ".datalad", ".heudiconv"):
+        (root / dot).mkdir(parents=True)
+    (root / ".git" / "annex" / "objects" / "xy" / "x.json").write_text("{}")
+    (root / ".heudiconv" / "info.json").write_text("{}")
+    # dot-prefixed entry nested below the root is also pruned
+    (func / ".hidden").mkdir()
+    (func / ".hidden" / "y.json").write_text("{}")
+
+
+class TestIterDatasetPaths:
+    """FR-044 — dataset-wide traversal prunes dotdirs before descending."""
+
+    @pytest.mark.ai_generated
+    def test_yields_like_rglob_without_dotdirs(self, tmp_path: Path) -> None:
+        _make_tree_with_dotdirs(tmp_path)
+        got = sorted(iter_dataset_paths(tmp_path))
+        expected = sorted(
+            p
+            for p in tmp_path.rglob("*")
+            if not any(
+                part.startswith(".") for part in p.relative_to(tmp_path).parts
+            )
+        )
+        assert got == expected
+
+    @pytest.mark.ai_generated
+    def test_pattern_filters_names(self, tmp_path: Path) -> None:
+        _make_tree_with_dotdirs(tmp_path)
+        got = sorted(iter_dataset_paths(tmp_path, "*.json"))
+        assert got == [
+            tmp_path / "dataset_description.json",
+            tmp_path / "sub-01" / "func" / "sub-01_task-rest_bold.json",
+        ]
+
+    @pytest.mark.ai_generated
+    def test_never_scans_inside_dotdirs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Walking ``.git`` races with background ``git gc`` (CI flake)."""
+        _make_tree_with_dotdirs(tmp_path)
+        scanned: list[Path] = []
+        real_scandir = os.scandir
+
+        def spy(path):  # type: ignore[no-untyped-def]
+            scanned.append(Path(path))
+            return real_scandir(path)
+
+        monkeypatch.setattr(os, "scandir", spy)
+        list(iter_dataset_paths(tmp_path, "*.json"))
+        assert scanned
+        for p in scanned:
+            rel = p.relative_to(tmp_path)
+            assert not any(part.startswith(".") for part in rel.parts), p
+
+    @pytest.mark.ai_generated
+    def test_tolerates_directory_vanishing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A directory removed mid-walk is skipped, not fatal."""
+        _make_tree_with_dotdirs(tmp_path)
+        real_scandir = os.scandir
+
+        def vanish(path):  # type: ignore[no-untyped-def]
+            if Path(path).name == "func":
+                raise FileNotFoundError(path)
+            return real_scandir(path)
+
+        monkeypatch.setattr(os, "scandir", vanish)
+        got = list(iter_dataset_paths(tmp_path, "*.json"))
+        assert got == [tmp_path / "dataset_description.json"]
+
+    @pytest.mark.ai_generated
+    def test_symlinks_yielded_not_followed(self, tmp_path: Path) -> None:
+        """Annexed files (symlinks, possibly broken) are yielded (FR-023)."""
+        (tmp_path / "real").mkdir()
+        (tmp_path / "real" / "a.json").write_text("{}")
+        (tmp_path / "linkdir").symlink_to(tmp_path / "real")
+        (tmp_path / "broken.json").symlink_to(tmp_path / "missing")
+        got = sorted(iter_dataset_paths(tmp_path, "*.json"))
+        assert got == [tmp_path / "broken.json", tmp_path / "real" / "a.json"]
 
 
 class TestOperationResult:
