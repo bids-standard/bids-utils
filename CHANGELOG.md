@@ -1,3 +1,21 @@
+# v0.1.2 (Wed Sep 30 2026)
+
+#### 🐛 Bug Fix
+
+- Prune dotdirs in dataset-wide scans (fix intermittent CI failure on main) [#20](https://github.com/bids-standard/bids-utils/pull/20) ([@claude](https://github.com/claude) [@yarikoptic-gitmate](https://github.com/yarikoptic-gitmate))
+
+#### ⚠️ Pushed to `main`
+
+- Add GitHub Action to sync community-meeting labeled issues/PRs to project board (juliakatharina.pfarr@gmx.de)
+
+#### Authors: 3
+
+- Claude ([@claude](https://github.com/claude))
+- GitMate for @yarikoptic ([@yarikoptic-gitmate](https://github.com/yarikoptic-gitmate))
+- julia-pfarr (juliakatharina.pfarr@gmx.de)
+
+---
+
 # v0.1.1 (Tue Jun 02 2026)
 
 #### 📝 Documentation
