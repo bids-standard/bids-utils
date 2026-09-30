@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import os
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from enum import Enum
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -303,6 +306,21 @@ def _is_bids_data_entry(path: Path) -> bool:
     # Regular files, symlinks (to files or broken), and anything else
     # that is not a directory qualifies.
     return not path.is_dir()
+
+
+def iter_dataset_paths(root: Path, pattern: str = "*") -> Iterator[Path]:
+    """Like ``root.rglob(pattern)`` but prunes dot-prefixed entries (FR-044).
+
+    Dotdirs (.git, .datalad, ...) are never descended into; directories
+    vanishing mid-walk are skipped; symlinked dirs are not followed.
+    *pattern* matches the entry name only, case-sensitively; order unspecified.
+    """
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        base = Path(dirpath)
+        for name in (*dirnames, *filenames):
+            if not name.startswith(".") and fnmatchcase(name, pattern):
+                yield base / name
 
 
 def normalize_subject_id(label: str) -> str:

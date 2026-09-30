@@ -12,7 +12,12 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from bids_utils._types import AnnexedMode, ContentNotAvailableError, is_bids_dir_file
+from bids_utils._types import (
+    AnnexedMode,
+    ContentNotAvailableError,
+    is_bids_dir_file,
+    iter_dataset_paths,
+)
 
 if TYPE_CHECKING:
     from bids_utils._vcs import VCSBackend
@@ -179,11 +184,7 @@ def update_json_references(
     Returns a list of modified files.
     """
     modified_files: list[Path] = []
-    for json_path in sorted(dataset_root.rglob("*.json")):
-        # Skip dotdirs — .git, .datalad, .heudiconv, etc. are never BIDS data
-        rel = json_path.relative_to(dataset_root)
-        if rel.parts and rel.parts[0].startswith("."):
-            continue
+    for json_path in sorted(iter_dataset_paths(dataset_root, "*.json")):
         # Skip files inside directory-based files
         if any(
             is_bids_dir_file(p)

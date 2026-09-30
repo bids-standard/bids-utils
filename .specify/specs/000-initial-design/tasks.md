@@ -502,6 +502,19 @@
 
 ---
 
+## Phase 1e: Dataset Traversal Hardening (FR-044)
+
+**Purpose**: Fix CI flake from dataset-wide scans walking `.git` during background `git gc` (spec BUG 2026-08-20); consolidate dataset-root traversal into one pruning walker.
+
+- [X] T150 [P] Regression tests first: `TestIterDatasetPaths` (`tests/test_types.py`) and `test_update_json_references_skips_vanishing_git_objects` (`tests/test_io.py`), injecting faults by monkeypatching `os.scandir`.
+- [X] T151 Implement `iter_dataset_paths(root, pattern="*")` in `src/bids_utils/_types.py`.
+- [X] T152 Replace dataset-root `rglob` in `update_json_references()` (`_io.py`), `_scan_json_files()` / `_scan_bids_files()` (`migrate.py`), `split_dataset()` (`split.py`), and `_find_json_sidecars()` / `segregate_metadata()` data-file discovery (`metadata.py`) with `iter_dataset_paths()`; drop the now-redundant post-hoc dotdir filters.
+- [X] T153 Set `gc.auto=0` in the annexed bids-examples fixture (`tests/integration/_worktree_fixture.py::_make_annexed`) so no detached `git gc` mutates test repositories during tests or `tmp_path` cleanup.
+
+**Checkpoint**: `tox` passes; the `tests/test_io.py` regression test fails against the pre-fix `rglob` code (py3.11/3.12/3.14).
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -511,6 +524,7 @@
 - **Phase 1b (Annexed Content / FR-022)**: Depends on Phase 1. Can be done at any point but SHOULD be done before real-world usage on git-annex/DataLad datasets. Retroactively completes VCS integration from Phase 1.
 - **Phase 1c (Symlink Safety & Dry-Run Detail / FR-003, FR-023, FR-024)**: Depends on Phase 1b. BLOCKS real-world usage on annexed datasets — the symlink bug causes silent data loss (files not renamed). Should be done immediately after Phase 1b.
 - **Phase 1d (Test Fixture Pattern / FR-042)**: Depends on Phase 1. Independent of app code. BLOCKS Phase 5b. Strongly recommended before Phase 2a/2b for non-BIDS coverage.
+- **Phase 1e (Traversal Hardening / FR-044)**: Depends on Phase 1. Independent of other phases.
 - **Phase 2 (Rename / US1)**: Depends on Phase 1
 - **Phase 2a (rename SRC DST refactor / FR-038, FR-039)**: Depends on Phase 2 (refactors existing T025–T030). Co-required with Phase 2b — cross-container `rename` delegates filename rewriting to `edit_filename`.
 - **Phase 2b (edit-filename / FR-040)**: Depends on Phase 1 + Phase 2 (replaces the entity-mutation behaviour of the original T025/T027). Co-required with Phase 2a.
